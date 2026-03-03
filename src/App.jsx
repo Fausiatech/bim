@@ -6,37 +6,27 @@ import SpeckleDashboard from './components/SpeckleDashboard'
 import { useSpeckle } from './hooks/useSpeckle'
 import './App.css'
 
-
-console.log('INICIO APP')
-
-
 const supabase = createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY)
-console.log('SUPABASE URL:', import.meta.env.VITE_SUPABASE_URL)
 const API_URL = 'http://localhost:8000'
 
-
 const CATEGORIES = {
-  all: { label: 'Todo', codes: [160246688, 3303938423, 3732776249, 2233826070, 3875453745, 753842376], color: null },
-  beams: { label: 'Vigas', codes: [160246688], color: new THREE.Color(0x2196F3) },
-  columns: { label: 'Columnas', codes: [3303938423], color: new THREE.Color(0xF44336) },
-  slabs: { label: 'Losas', codes: [3732776249, 1410488051, 2533272240], color: new THREE.Color(0x4CAF50) },
-  footings: { label: 'Zapatas', codes: [2233826070], color: new THREE.Color(0xFF9800) },
-  members: { label: 'Miembros', codes: [3875453745], color: new THREE.Color(0x9C27B0) },
-  walls: { label: 'Muros', codes: [753842376], color: new THREE.Color(0x607D8B) },
+  all:     { label: 'Todo',     codes: [160246688, 3303938423, 3732776249, 2233826070, 3875453745, 753842376], color: null },
+  beams:   { label: 'Vigas',    codes: [160246688],              color: '#2196F3' },
+  columns: { label: 'Columnas', codes: [3303938423],             color: '#F44336' },
+  slabs:   { label: 'Losas',    codes: [3732776249, 1410488051, 2533272240], color: '#4CAF50' },
+  footings:{ label: 'Zapatas',  codes: [2233826070],             color: '#FF9800' },
+  members: { label: 'Miembros', codes: [3875453745],             color: '#9C27B0' },
+  walls:   { label: 'Muros',    codes: [753842376],              color: '#607D8B' },
 }
 
-
-// Estados IFC (remitos/GPS) — separados de los estados Speckle (avance de obra)
 const ESTADOS_IFC = {
-  entregado: { label: 'Entregado', color: '#4CAF50', three: new THREE.Color(0x4CAF50), icon: '✅' },
-  en_camino: { label: 'En camino', color: '#FFC107', three: new THREE.Color(0xFFC107), icon: '🚚' },
-  pendiente: { label: 'Pendiente', color: '#F44336', three: new THREE.Color(0xF44336), icon: '🔴' },
+  entregado: { label: 'Entregado', color: '#4CAF50', three: 0x4CAF50, icon: '✅' },
+  en_camino: { label: 'En camino', color: '#FFC107', three: 0xFFC107, icon: '🚚' },
+  pendiente: { label: 'Pendiente', color: '#F44336', three: 0xF44336, icon: '🔴' },
 }
 
-
-const OBRA = { lat: -31.4167, lng: -64.1833, nombre: 'Obra Av. Colón 1200, Córdoba' }
+const OBRA   = { lat: -31.4167, lng: -64.1833, nombre: 'Obra Av. Colón 1200, Córdoba' }
 const PLANTA = { lat: -31.3500, lng: -64.2200, nombre: 'Hormigonera Norte Cba' }
-
 
 function distKm(a, b) {
   const R = 6371, dLat = (b.lat - a.lat) * Math.PI / 180, dLng = (b.lng - a.lng) * Math.PI / 180
@@ -45,11 +35,9 @@ function distKm(a, b) {
 }
 function interpolar(a, b, t) { return { lat: a.lat + (b.lat - a.lat) * t, lng: a.lng + (b.lng - a.lng) * t } }
 
-
 const RESISTENCIAS = ['H-17', 'H-21', 'H-25', 'H-30', 'H-35']
-const PATENTES = ['AA 123 BB', 'CC 456 DD', 'EE 789 FF', 'GG 012 HH']
-const CHOFERES = ['García, Carlos', 'López, Mario', 'Fernández, Juan', 'Rodríguez, Pedro']
-
+const PATENTES     = ['AA 123 BB', 'CC 456 DD', 'EE 789 FF', 'GG 012 HH']
+const CHOFERES     = ['García, Carlos', 'López, Mario', 'Fernández, Juan', 'Rodríguez, Pedro']
 
 function generarRemitos(estadoIds) {
   const remitos = []; let nro = 1001; const now = new Date()
@@ -75,84 +63,55 @@ function generarRemitos(estadoIds) {
   return remitos.sort((a, b) => b.nro.localeCompare(a.nro))
 }
 
-
 export default function App() {
-  const viewerRef = useRef(null)
-  const fileInputRef = useRef(null)
+  const viewerRef      = useRef(null)
+  const fileInputRef   = useRef(null)
   const gpsIntervalRef = useRef(null)
   const gpsProgressRef = useRef(0)
 
+  const [currentModel,  setCurrentModel]  = useState(null)
+  const [currentCat,    setCurrentCat]    = useState('all')
+  const [categoryIds,   setCategoryIds]   = useState({})
+  const [modelData,     setModelData]     = useState(null)
+  const [currentUser,   setCurrentUser]   = useState(null)
+  const [loading,       setLoading]       = useState(false)
+  const [ifcStats,      setIfcStats]      = useState({ total: 0, volume: 0, concrete: 0, steel: 0, none: 0 })
+  const [fileSize,      setFileSize]      = useState('')
+  const [fileName,      setFileName]      = useState('')
+  const [chatMessages,  setChatMessages]  = useState([])
+  const [chatInput,     setChatInput]     = useState('')
+  const [chatLoading,   setChatLoading]   = useState(false)
+  const [wallsVisible,  setWallsVisible]  = useState(true)
+  const [estadoIds,     setEstadoIds]     = useState({})
+  const [activeTab,     setActiveTab]     = useState('categorias')
+  const [selectedEstado,setSelectedEstado]= useState(null)
+  const [remitos,       setRemitos]       = useState([])
+  const [camionPos,     setCamionPos]     = useState(null)
+  const [camionDist,    setCamionDist]    = useState(null)
+  const [camionEstado,  setCamionEstado]  = useState('en_ruta')
 
-  // ── IFC viewer state ────────────────────────────────────
-  const [currentModel, setCurrentModel] = useState(null)
-  const [currentCat, setCurrentCat] = useState('all')
-  const [categoryIds, setCategoryIds] = useState({})
-  const [modelData, setModelData] = useState(null)
-  const [currentUser, setCurrentUser] = useState(null)
-  const [loading, setLoading] = useState(false)
-  const [ifcStats, setIfcStats] = useState({ total: 0, volume: 0, concrete: 0, steel: 0, none: 0 })
-  const [fileSize, setFileSize] = useState('')
-  const [fileName, setFileName] = useState('')
-  const [chatMessages, setChatMessages] = useState([])
-  const [chatInput, setChatInput] = useState('')
-  const [chatLoading, setChatLoading] = useState(false)
-  const [wallsVisible, setWallsVisible] = useState(true)
-  const [estadoIds, setEstadoIds] = useState({})
-  const [activeTab, setActiveTab] = useState('categorias')
-  const [selectedEstado, setSelectedEstado] = useState(null)
-  const [remitos, setRemitos] = useState([])
-  const [camionPos, setCamionPos] = useState(null)
-  const [camionDist, setCamionDist] = useState(null)
-  const [camionEstado, setCamionEstado] = useState('en_ruta')
+  // ── Speckle ─────────────────────────────────────────────
+  const { elementos: speckleEls, loading: speckleLoading, error: speckleError,
+          lastSync, projectName, stats: speckleStats, load: loadSpeckle,
+          setElementos: setSpeckleEls } = useSpeckle()
 
-
-  // ── Speckle hook ────────────────────────────────────────
-  console.log('useSpeckle fn:', typeof useSpeckle)
-  const {
-    elementos: speckleEls,
-    loading: speckleLoading,
-    error: speckleError,
-    lastSync,
-    projectName,
-    stats: speckleStats,
-    load: loadSpeckle,
-    setElementos: setSpeckleEls,
-  } = useSpeckle()
-
-
-  // ── Speckle token (sessionStorage) ─────────────────────
-  // Token ya no se necesita en el frontend — el proxy Vite lo maneja
- const conectarSpeckle = useCallback((tok) => {
-  try {
-    sessionStorage.setItem('speckle_token', tok);
-    setSpeckleToken(tok);
-    setShowTokenInput(false);
-   
+  // Auto-cargar Speckle al iniciar
+  useEffect(() => {
     loadSpeckle(
       import.meta.env.VITE_SPECKLE_PROJECT_ID,
-      tok,
       import.meta.env.VITE_SPECKLE_MODEL_ID
-    );
-  } catch (e) {
-    console.error('ERROR EN CONEXIÓN:', e);
-  }
-}, [loadSpeckle]);
-   
+    )
+  }, [loadSpeckle])
+
   const handleSpeckleEstadoChange = useCallback((id, estado) => {
     setSpeckleEls(prev => prev.map(e => e.id === id ? { ...e, estado } : e))
   }, [setSpeckleEls])
-  //console.log('PASO 5')
-  const handleEstadoClick = useCallback((estado) => {
-  if (selectedEstado === estado) { setSelectedEstado(null); colorearEstado(null, []) }
-  else { setSelectedEstado(estado); colorearEstado(estado, estadoIds[estado] ?? []); setActiveTab('remitos') }
-}, [selectedEstado, estadoIds, colorearEstado])
-
 
   // ── Supabase auth ───────────────────────────────────────
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setCurrentUser(session?.user ?? null))
   }, [])
-  console.log('PASO 6')
+
   // ── IFC viewer init ─────────────────────────────────────
   useEffect(() => {
     if (viewerRef.current) return
@@ -173,14 +132,16 @@ export default function App() {
     init()
     window.addEventListener('dblclick', async () => {
       if (!viewerRef.current) return
-      const result = await viewerRef.current.IFC.selector.pickIfcItem()
-      if (!result) return
-      const props = await viewerRef.current.IFC.loader.ifcManager.getItemProperties(result.modelID, result.id)
-      console.log('Elemento clickeado:', props)
+      try {
+        const result = await viewerRef.current.IFC.selector.pickIfcItem()
+        if (!result) return
+        const props = await viewerRef.current.IFC.loader.ifcManager.getItemProperties(result.modelID, result.id)
+        console.log('Elemento clickeado:', props)
+      } catch (e) { console.error('pick:', e) }
     })
     return () => { viewerRef.current?.dispose?.() }
   }, [])
-  console.log('PASO 7')
+
   // ── GPS simulado ────────────────────────────────────────
   const iniciarGPS = useCallback(() => {
     if (gpsIntervalRef.current) clearInterval(gpsIntervalRef.current)
@@ -195,12 +156,9 @@ export default function App() {
     }, 1000)
   }, [])
 
-
   useEffect(() => () => { if (gpsIntervalRef.current) clearInterval(gpsIntervalRef.current) }, [])
 
-
   const getScene = () => viewerRef.current?.context?.scene?.scene ?? viewerRef.current?.context?.getScene()
-
 
   // ── Supabase storage ────────────────────────────────────
   const uploadToStorage = async (file) => {
@@ -211,7 +169,6 @@ export default function App() {
     return data.path
   }
 
-
   const saveAnalysis = async (name, sp, total, vol, summary) => {
     if (!currentUser) return
     await supabase.from('ifc_analyses').insert({
@@ -221,14 +178,12 @@ export default function App() {
     })
   }
 
-
   // ── Scan IFC model ──────────────────────────────────────
   const scanModel = async (modelID, name, sp) => {
     const mgr = viewerRef.current.IFC.loader.ifcManager
     const ids = {}
     let total = 0, concrete = 0, steel = 0, none = 0, vol = 0
     const summary = {}, concreteIds = []
-
 
     for (const [key, cat] of Object.entries(CATEGORIES)) {
       if (key === 'all') continue; ids[key] = []
@@ -260,8 +215,6 @@ export default function App() {
       }
     }
 
-
-    // Volumen geométrico desde malla
     let geoVol = 0
     try {
       const mesh = viewerRef.current.context.getScene().children.find(c => c.type === 'Mesh')
@@ -282,10 +235,8 @@ export default function App() {
       }
     } catch (e) { console.log('vol geo:', e.message) }
 
-
     setCategoryIds(ids)
     setIfcStats({ total, volume: geoVol > 0 ? geoVol : vol, concrete, steel, none })
-
 
     if (concreteIds.length > 0) {
       const estados = { entregado: [], en_camino: [], pendiente: [] }
@@ -300,113 +251,92 @@ export default function App() {
       if (estados.en_camino.length > 0) iniciarGPS()
     }
 
-
     const md = { fileName: name, schema: 'IFC2X3', total, categories: ids, summary, concreteCount: concrete, steelCount: steel, noneCount: none }
     setModelData(md)
     setChatMessages(prev => [...prev, { role: 'assistant', text: `Modelo "${name}" analizado. ${total} elementos, ${concrete} de hormigón.` }])
     await saveAnalysis(name, sp, total, vol, summary)
   }
 
-
   // ── Colorear por estado IFC ─────────────────────────────
   const colorearEstado = useCallback((estado, ids) => {
-  if (!viewerRef.current || !currentModel) return;
- 
-  const modelID = currentModel.modelID;
-  const mgr = viewerRef.current.IFC.loader.ifcManager;
- 
-  // 1. Limpieza segura: Removemos solo si el modelo es válido
-  // Usamos una limpieza genérica para evitar el bucle infinito
-  try {
-    mgr.removeSubset(modelID); // Limpia subsets por defecto
-    // Limpieza específica de tus estados
+    if (!viewerRef.current || !currentModel) return
+    const modelID = currentModel.modelID
+    const mgr = viewerRef.current.IFC.loader.ifcManager
     Object.keys(ESTADOS_IFC).forEach(k => {
-      try { mgr.removeSubset(modelID, undefined, `est-${k}`); } catch(e) {}
-    });
-  } catch (err) {
-    console.warn("Aviso: No se pudo limpiar el subset previo", err);
-  }
+      try { mgr.removeSubset(modelID, undefined, `est-${k}`) } catch (_) {}
+    })
+    try { mgr.removeSubset(modelID, undefined, 'highlight') } catch (_) {}
+    if (!estado || !ids?.length) return
+    const colorBase = new THREE.Color(ESTADOS_IFC[estado].three)
+    const mat = new THREE.MeshLambertMaterial({
+      color: colorBase,
+      transparent: true,
+      opacity: 0.9,
+      emissive: colorBase,
+      emissiveIntensity: 0.3,
+      depthTest: true,
+      side: THREE.DoubleSide,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+      polygonOffsetUnits: -2,
+    })
+    try {
+      const validIds = ids.map(id => parseInt(id)).filter(id => !isNaN(id))
+      mgr.createSubset({ modelID, ids: validIds, material: mat, removePrevious: true, customID: `est-${estado}` })
+      console.log(`✅ Coloreado: ${estado} (${validIds.length} elementos)`)
+    } catch (e) { console.error('colorear:', e.message) }
+  }, [currentModel])
 
+  // ── Handle estado click ─────────────────────────────────
+  const handleEstadoClick = useCallback((estado) => {
+    if (selectedEstado === estado) { setSelectedEstado(null); colorearEstado(null, []) }
+    else { setSelectedEstado(estado); colorearEstado(estado, estadoIds[estado] ?? []); setActiveTab('remitos') }
+  }, [selectedEstado, estadoIds, colorearEstado])
 
-  if (!estado || !ids || ids.length === 0) return;
-
-
-  // 2. Definición de material (Optimizado)
-  const colorBase = ESTADOS_IFC[estado]?.three || new THREE.Color(0xffffff);
-  const mat = new THREE.MeshLambertMaterial({
-    color: colorBase,
-    transparent: true,
-    opacity: 0.8, // Bajamos un poco la opacidad para evitar flickering
-    emissive: colorBase,
-    emissiveIntensity: 0.2,
-    depthTest: true,
-    side: THREE.DoubleSide // Evita que los muros desaparezcan al girar
-  });
-
-
-  // 3. Creación del Subset con validación de IDs
-  try {
-    // IMPORTANTE: Nos aseguramos de que los IDs sean números enteros
-    const validIds = ids.map(id => parseInt(id)).filter(id => !isNaN(id));
-   
-    mgr.createSubset({
-      modelID,
-      ids: validIds,
-      material: mat,
-      removePrevious: true,
-      customID: `est-${estado}`
-    });
-   
-    console.log(`✅ Coloreado estado: ${estado} (${validIds.length} elementos)`);
-  } catch (e) {
-    console.error('Error al colorear:', e.message);
-  }
-}, [currentModel]);
   // ── Highlight categoría ─────────────────────────────────
   const highlightCategory = useCallback(async (cat) => {
     if (!currentModel || !viewerRef.current) return
     const modelID = currentModel.modelID
     const mgr = viewerRef.current.IFC.loader.ifcManager
     const scene = getScene()
-    for (const k of Object.keys(ESTADOS_IFC)) try { mgr.removeSubset(modelID, undefined, `est-${k}`) } catch (_) { }
-    try { mgr.removeSubset(modelID, undefined, 'highlight') } catch (_) { }
+    Object.keys(ESTADOS_IFC).forEach(k => { try { mgr.removeSubset(modelID, undefined, `est-${k}`) } catch (_) {} })
+    try { mgr.removeSubset(modelID, undefined, 'highlight') } catch (_) {}
     setSelectedEstado(null)
     if (cat === 'all') return
     const ids = categoryIds[cat] ?? []
     if (!ids.length) return
-    const mat = new THREE.MeshLambertMaterial({ color: CATEGORIES[cat].color, transparent: true, opacity: 0.9 })
+    const mat = new THREE.MeshLambertMaterial({ color: new THREE.Color(CATEGORIES[cat].color), transparent: true, opacity: 0.9 })
     try { mgr.createSubset({ modelID, ids, material: mat, scene, removePrevious: true, customID: 'highlight' }) }
     catch (e) { console.error('highlight:', e.message) }
   }, [currentModel, categoryIds])
 
-
   // ── Toggle muros ────────────────────────────────────────
-   const toggleWalls = useCallback(() => {
+  const toggleWalls = useCallback(async () => {
   if (!currentModel || !viewerRef.current) return
   const modelID = currentModel.modelID
   const mgr = viewerRef.current.IFC.loader.ifcManager
   const scene = getScene()
-  const wallIds = categoryIds['walls'] ?? []
-  console.log('wallIds:', wallIds)
-  console.log('categorías:', Object.keys(categoryIds))
-  if (!wallIds.length) return
+  const wallIds = new Set(categoryIds['walls'] ?? [])
+  if (!wallIds.size) return
   const next = !wallsVisible
   try {
     if (!next) {
-      const mat = new THREE.MeshBasicMaterial({
-        transparent: true,
-        opacity: 0,
-        colorWrite: false,
-        depthWrite: false,
-        side: THREE.DoubleSide
-      })
-      mgr.createSubset({ modelID, ids: wallIds, material: mat, scene, removePrevious: true, customID: 'walls-off' })
+      // Obtener todos los IDs del modelo y filtrar muros
+      const allIds = Object.values(categoryIds).flat()
+      const idsWithoutWalls = allIds.filter(id => !wallIds.has(id))
+      mgr.createSubset({ modelID, ids: idsWithoutWalls, scene, removePrevious: true, customID: 'no-walls' })
+      // Ocultar el modelo original
+      const mesh = scene.children.find(c => c.modelID === modelID)
+      if (mesh) mesh.visible = false
     } else {
-      try { mgr.removeSubset(modelID, undefined, 'walls-off') } catch (_) {}
+      try { mgr.removeSubset(modelID, undefined, 'no-walls') } catch (_) {}
+      const mesh = scene.children.find(c => c.modelID === modelID)
+      if (mesh) mesh.visible = true
     }
     setWallsVisible(next)
   } catch (e) { console.error('toggleWalls:', e.message) }
 }, [currentModel, categoryIds, wallsVisible])
+
   // ── Handle IFC file ─────────────────────────────────────
   const handleFile = async (file) => {
     if (!file || !viewerRef.current) return
@@ -438,7 +368,6 @@ export default function App() {
     }
   }
 
-
   // ── Chat IA ─────────────────────────────────────────────
   const sendMessage = async () => {
     if (!chatInput.trim() || !modelData || chatLoading) return
@@ -453,312 +382,290 @@ export default function App() {
     setChatLoading(false)
   }
 
-
   const totalCatIds = Object.values(categoryIds).flat().length
   const remitosFiltered = selectedEstado ? remitos.filter(r => r.estado === selectedEstado) : remitos
   const gpsBannerColor = camionEstado === 'proximo' ? '#FFC107' : camionEstado === 'entregado' ? '#4CAF50' : '#607D8B'
   const gpsBannerText = camionEstado === 'proximo'
     ? `🚚 Camión a ${camionDist?.toFixed(1)} km — ¡Próxima entrega!`
     : camionEstado === 'entregado' ? '✅ Entrega completada en obra'
-      : `🚚 En ruta · ${camionDist?.toFixed(1) ?? '...'} km a la obra`
+    : `🚚 En ruta · ${camionDist?.toFixed(1) ?? '...'} km a la obra`
 
-
-  // Tabs del sidebar — dashboard solo si hay token Speckle
   const sidebarTabs = [
     ['categorias', 'Modelo'],
     ['remitos', 'Remitos'],
     ['dashboard', '📊 BI'],
   ]
- 
-return (
-  <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
 
-    {/* HEADER */}
-    <header className="header">
-      <div className="logo">
-        <img src="/logo.png" alt="BIM AI" style={{ height: 36 }} />
-        <span className="logo-text">BIM AI</span>
-      </div>
-      <nav className="nav-links">
-        <a href="#" className="nav-link">Inicio</a>
-        <a href="#" className="nav-link">Proyectos</a>
-        <a href="#" className="nav-link">Documentación</a>
-        {lastSync ? (
-          <span style={{ fontSize: '0.78rem', color: '#22c55e', fontWeight: 600 }}>
-            ⚡ Speckle · {lastSync}
-          </span>
-        ) : (
-          <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
-            ⚡ Conectando Speckle...
-          </span>
-        )}
-        <button className="btn-contact">Contacto</button>
-      </nav>
-    </header>
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
 
-    <div className="main-container">
-
-      {/* SIDEBAR */}
-      <aside className="sidebar">
-        <div className="sidebar-header">
-          <div className="sidebar-title">
-            {activeTab === 'dashboard' && speckleStats.total > 0
-              ? (projectName || 'Speckle Dashboard')
-              : 'Estructura del Modelo'}
-          </div>
-          <div className="sidebar-subtitle">
-            {activeTab === 'dashboard'
-              ? `${speckleStats.total} elementos · ${speckleStats.avance}% avance`
-              : fileName || 'Sin modelo cargado'}
-          </div>
-          <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.75rem' }}>
-            {sidebarTabs.map(([k, l]) => (
-              <button key={k} onClick={() => setActiveTab(k)} style={{
-                flex: 1, padding: '0.3rem 0.2rem', border: 'none', borderRadius: 6, cursor: 'pointer',
-                fontSize: '0.72rem', fontWeight: 600,
-                background: activeTab === k ? 'var(--primary)' : 'var(--border)',
-                color: activeTab === k ? 'white' : 'var(--text-gray)'
-              }}>{l}</button>
-            ))}
-          </div>
+      <header className="header">
+        <div className="logo">
+          <img src="/logo.png" alt="BIM AI" style={{ height: 36 }} />
+          <span className="logo-text">BIM AI</span>
         </div>
+        <nav className="nav-links">
+          <a href="#" className="nav-link">Inicio</a>
+          <a href="#" className="nav-link">Proyectos</a>
+          <a href="#" className="nav-link">Documentación</a>
+          {lastSync
+            ? <span style={{ fontSize: '0.78rem', color: '#22c55e', fontWeight: 600 }}>⚡ Speckle · {lastSync}</span>
+            : <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>⚡ Conectando Speckle...</span>
+          }
+          <button className="btn-contact">Contacto</button>
+        </nav>
+      </header>
 
-        <div className="sidebar-content">
-
-          {/* GPS banner */}
-          {camionPos && activeTab !== 'dashboard' && (
-            <div style={{ background: gpsBannerColor, color: 'white', borderRadius: 8, padding: '0.6rem 0.75rem', fontSize: '0.8rem', fontWeight: 600 }}>
-              {gpsBannerText}
-              <div style={{ fontSize: '0.7rem', fontWeight: 400, marginTop: '0.2rem', opacity: 0.9 }}>
-                📍 {PLANTA.nombre} → {OBRA.nombre}
-              </div>
+      <div className="main-container">
+        <aside className="sidebar">
+          <div className="sidebar-header">
+            <div className="sidebar-title">
+              {activeTab === 'dashboard' && speckleStats.total > 0 ? (projectName || 'Speckle Dashboard') : 'Estructura del Modelo'}
             </div>
-          )}
-
-          {/* TAB MODELO */}
-          {activeTab === 'categorias' && (<>
-            <div className="tree-section">
-              <div className="tree-section-title">Categorías</div>
-              {Object.entries(CATEGORIES).map(([key, cat]) => (
-                <div key={key} className={`cat-item tree-item${currentCat === key ? ' active' : ''}`}
-                  onClick={async () => { if (!currentModel) return; setCurrentCat(key); await highlightCategory(key) }}>
-                  <span>{cat.label}</span>
-                  <span className="cat-count">{key === 'all' ? totalCatIds : (categoryIds[key]?.length ?? 0)}</span>
-                </div>
+            <div className="sidebar-subtitle">
+              {activeTab === 'dashboard' ? `${speckleStats.total} elementos · ${speckleStats.avance}% avance` : fileName || 'Sin modelo cargado'}
+            </div>
+            <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.75rem' }}>
+              {sidebarTabs.map(([k, l]) => (
+                <button key={k} onClick={() => setActiveTab(k)} style={{
+                  flex: 1, padding: '0.3rem 0.2rem', border: 'none', borderRadius: 6, cursor: 'pointer',
+                  fontSize: '0.72rem', fontWeight: 600,
+                  background: activeTab === k ? 'var(--primary)' : 'var(--border)',
+                  color: activeTab === k ? 'white' : 'var(--text-gray)'
+                }}>{l}</button>
               ))}
             </div>
+          </div>
 
-            {currentModel && (
-              <div className="tree-section">
-                <div className="tree-section-title">Visibilidad</div>
-                <div className={`cat-item tree-item${!wallsVisible ? ' active' : ''}`} onClick={toggleWalls}>
-                  <span>{wallsVisible ? '👁 Muros visibles' : '🚫 Muros ocultos'}</span>
-                  <span className="cat-count">{categoryIds['walls']?.length ?? 0}</span>
+          <div className="sidebar-content">
+            {camionPos && activeTab !== 'dashboard' && (
+              <div style={{ background: gpsBannerColor, color: 'white', borderRadius: 8, padding: '0.6rem 0.75rem', fontSize: '0.8rem', fontWeight: 600 }}>
+                {gpsBannerText}
+                <div style={{ fontSize: '0.7rem', fontWeight: 400, marginTop: '0.2rem', opacity: 0.9 }}>
+                  📍 {PLANTA.nombre} → {OBRA.nombre}
                 </div>
               </div>
             )}
 
-            {currentModel && Object.keys(estadoIds).length > 0 && (
+            {/* TAB MODELO */}
+            {activeTab === 'categorias' && (<>
               <div className="tree-section">
-                <div className="tree-section-title">Estado de Obra</div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-gray)', padding: '0 0.5rem 0.5rem', lineHeight: 1.4 }}>
-                  Clic para colorear en modelo
+                <div className="tree-section-title">Categorías</div>
+                {Object.entries(CATEGORIES).map(([key, cat]) => (
+                  <div key={key} className={`cat-item tree-item${currentCat === key ? ' active' : ''}`}
+                    onClick={async () => { if (!currentModel) return; setCurrentCat(key); await highlightCategory(key) }}>
+                    <span>{cat.label}</span>
+                    <span className="cat-count">{key === 'all' ? totalCatIds : (categoryIds[key]?.length ?? 0)}</span>
+                  </div>
+                ))}
+              </div>
+
+              {currentModel && (
+                <div className="tree-section">
+                  <div className="tree-section-title">Visibilidad</div>
+                  <div className={`cat-item tree-item${!wallsVisible ? ' active' : ''}`} onClick={toggleWalls}>
+                    <span>{wallsVisible ? '👁 Muros visibles' : '🚫 Muros ocultos'}</span>
+                    <span className="cat-count">{categoryIds['walls']?.length ?? 0}</span>
+                  </div>
                 </div>
-                {Object.entries(ESTADOS_IFC).map(([key, est]) => (
-                  <div key={key} className={`cat-item tree-item${selectedEstado === key ? ' active' : ''}`}
-                    onClick={() => handleEstadoClick(key)} style={{ paddingLeft: '0.75rem' }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <span style={{ width: 12, height: 12, borderRadius: '50%', background: est.color, display: 'inline-block', flexShrink: 0 }} />
-                      {est.icon} {est.label}
-                    </span>
-                    <span className="cat-count">{estadoIds[key]?.length ?? 0}</span>
+              )}
+
+              {currentModel && Object.keys(estadoIds).length > 0 && (
+                <div className="tree-section">
+                  <div className="tree-section-title">Estado de Obra</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-gray)', padding: '0 0.5rem 0.5rem', lineHeight: 1.4 }}>
+                    Clic para colorear en modelo
+                  </div>
+                  {Object.entries(ESTADOS_IFC).map(([key, est]) => (
+                    <div key={key} className={`cat-item tree-item${selectedEstado === key ? ' active' : ''}`}
+                      onClick={() => handleEstadoClick(key)} style={{ paddingLeft: '0.75rem' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{ width: 12, height: 12, borderRadius: '50%', background: est.color, display: 'inline-block', flexShrink: 0 }} />
+                        {est.icon} {est.label}
+                      </span>
+                      <span className="cat-count">{estadoIds[key]?.length ?? 0}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="chat-panel">
+                <div className="chat-header">
+                  <span className="chat-title">💬 Chat IA</span>
+                  <span className="chat-status">{modelData ? 'Modelo listo' : 'Sin modelo'}</span>
+                </div>
+                <div className="chat-messages">
+                  {chatMessages.map((m, i) => <div key={i} className={`chat-message ${m.role}`}>{m.text}</div>)}
+                  {chatLoading && <div className="chat-message assistant">Analizando...</div>}
+                </div>
+                <div className="chat-input-row">
+                  <input className="chat-input" value={chatInput}
+                    onChange={e => setChatInput(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && sendMessage()}
+                    placeholder={modelData ? 'Pregunta sobre el modelo...' : 'Carga un modelo primero'}
+                    disabled={!modelData || chatLoading} />
+                  <button className="chat-send-btn" onClick={sendMessage} disabled={!modelData || chatLoading}>➤</button>
+                </div>
+              </div>
+            </>)}
+
+            {/* TAB REMITOS */}
+            {activeTab === 'remitos' && (
+              <div className="tree-section">
+                <div className="tree-section-title">
+                  {selectedEstado ? `Remitos — ${ESTADOS_IFC[selectedEstado]?.label}` : 'Todos los remitos'}
+                  {selectedEstado && (
+                    <span onClick={() => { setSelectedEstado(null); colorearEstado(null, []) }}
+                      style={{ cursor: 'pointer', marginLeft: '0.5rem', color: 'var(--text-gray)', fontWeight: 400 }}>✕ ver todos</span>
+                  )}
+                </div>
+                {remitosFiltered.length === 0 && (
+                  <div style={{ color: 'var(--text-gray)', fontSize: '0.85rem', padding: '0.5rem' }}>Sin remitos</div>
+                )}
+                {remitosFiltered.map((r, i) => (
+                  <div key={i} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '0.75rem', marginBottom: '0.5rem', background: 'white', fontSize: '0.8rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', alignItems: 'center' }}>
+                      <strong>{r.nro}</strong>
+                      <span style={{
+                        background: r.estado === 'entregado' ? '#e8f5e9' : '#fff8e1',
+                        color: r.estado === 'entregado' ? '#2e7d32' : '#f57f17',
+                        padding: '2px 8px', borderRadius: 10, fontSize: '0.72rem', fontWeight: 600
+                      }}>{ESTADOS_IFC[r.estado].icon} {ESTADOS_IFC[r.estado].label}</span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.2rem', color: 'var(--text-gray)' }}>
+                      <span>📅 {r.fecha} {r.hora}</span>
+                      <span>🏗 {r.resistencia} · {r.asentamiento}</span>
+                      <span>🚚 {r.patente}</span>
+                      <span>📦 {r.m3} m³</span>
+                      <span style={{ gridColumn: '1/-1' }}>👤 {r.chofer}</span>
+                      <span style={{ gridColumn: '1/-1', fontSize: '0.7rem', color: '#bbb' }}>ID IFC: {r.elementoId}</span>
+                    </div>
                   </div>
                 ))}
               </div>
             )}
 
-            <div className="chat-panel">
-              <div className="chat-header">
-                <span className="chat-title">💬 Chat IA</span>
-                <span className="chat-status">{modelData ? 'Modelo listo' : 'Sin modelo'}</span>
-              </div>
-              <div className="chat-messages">
-                {chatMessages.map((m, i) => <div key={i} className={`chat-message ${m.role}`}>{m.text}</div>)}
-                {chatLoading && <div className="chat-message assistant">Analizando...</div>}
-              </div>
-              <div className="chat-input-row">
-                <input className="chat-input" value={chatInput}
-                  onChange={e => setChatInput(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && sendMessage()}
-                  placeholder={modelData ? 'Pregunta sobre el modelo...' : 'Carga un modelo primero'}
-                  disabled={!modelData || chatLoading} />
-                <button className="chat-send-btn" onClick={sendMessage} disabled={!modelData || chatLoading}>➤</button>
-              </div>
-            </div>
-          </>)}
-
-          {/* TAB REMITOS */}
-          {activeTab === 'remitos' && (
-            <div className="tree-section">
-              <div className="tree-section-title">
-                {selectedEstado ? `Remitos — ${ESTADOS_IFC[selectedEstado]?.label}` : 'Todos los remitos'}
-                {selectedEstado && (
-                  <span onClick={() => { setSelectedEstado(null); colorearEstado(null, []) }}
-                    style={{ cursor: 'pointer', marginLeft: '0.5rem', color: 'var(--text-gray)', fontWeight: 400 }}>✕ ver todos</span>
+            {/* TAB DASHBOARD BI */}
+            {activeTab === 'dashboard' && (
+              <>
+                {speckleLoading ? (
+                  <div style={{ padding: 24, textAlign: 'center', color: '#94a3b8' }}>
+                    <div className="loading-spinner" style={{ margin: '0 auto 8px' }} />
+                    <div style={{ fontSize: 12 }}>Cargando desde Speckle...</div>
+                  </div>
+                ) : speckleError ? (
+                  <div style={{ padding: 12, background: '#fee2e2', borderRadius: 8, fontSize: 12, color: '#ef4444' }}>
+                    ⚠️ {speckleError}
+                    <button onClick={() => loadSpeckle(import.meta.env.VITE_SPECKLE_PROJECT_ID, import.meta.env.VITE_SPECKLE_MODEL_ID)}
+                      style={{ display: 'block', marginTop: 8, padding: '4px 10px', background: '#ef4444', color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 11 }}>
+                      Reintentar
+                    </button>
+                  </div>
+                ) : (
+                  <SpeckleDashboard
+                    elementos={speckleEls}
+                    stats={speckleStats}
+                    lastSync={lastSync}
+                    projectName={projectName}
+                    onEstadoChange={handleSpeckleEstadoChange}
+                  />
                 )}
+              </>
+            )}
+          </div>
+        </aside>
+
+        <div className="viewer-area">
+          {currentModel && (
+            <div className="info-cards">
+              <div className="info-card">
+                <div className="info-card-label">Total elementos</div>
+                <div className="info-card-value">{ifcStats.total.toLocaleString()}</div>
               </div>
-              {remitosFiltered.length === 0 && (
-                <div style={{ color: 'var(--text-gray)', fontSize: '0.85rem', padding: '0.5rem' }}>Sin remitos</div>
-              )}
-              {remitosFiltered.map((r, i) => (
-                <div key={i} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '0.75rem', marginBottom: '0.5rem', background: 'white', fontSize: '0.8rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', alignItems: 'center' }}>
-                    <strong>{r.nro}</strong>
-                    <span style={{
-                      background: r.estado === 'entregado' ? '#e8f5e9' : '#fff8e1',
-                      color: r.estado === 'entregado' ? '#2e7d32' : '#f57f17',
-                      padding: '2px 8px', borderRadius: 10, fontSize: '0.72rem', fontWeight: 600
-                    }}>{ESTADOS_IFC[r.estado].icon} {ESTADOS_IFC[r.estado].label}</span>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.2rem', color: 'var(--text-gray)' }}>
-                    <span>📅 {r.fecha} {r.hora}</span>
-                    <span>🏗 {r.resistencia} · {r.asentamiento}</span>
-                    <span>🚚 {r.patente}</span>
-                    <span>📦 {r.m3} m³</span>
-                    <span style={{ gridColumn: '1/-1' }}>👤 {r.chofer}</span>
-                    <span style={{ gridColumn: '1/-1', fontSize: '0.7rem', color: '#bbb' }}>ID IFC: {r.elementoId}</span>
-                  </div>
+              <div className="info-card">
+                <div className="info-card-label">Volumen hormigón</div>
+                <div className="info-card-value">{ifcStats.volume > 0 ? ifcStats.volume.toFixed(1) : '0'} <small style={{ fontSize: '1rem' }}>m³</small></div>
+              </div>
+              <div className="info-card">
+                <div className="info-card-label">Hormigón detectado</div>
+                <div className="info-card-value">{ifcStats.concrete}</div>
+              </div>
+              <div className="info-card">
+                <div className="info-card-label">Archivo</div>
+                <div className="info-card-value" style={{ fontSize: '1.2rem' }}>{fileSize}</div>
+              </div>
+              {speckleStats.total > 0 && (
+                <div className="info-card" style={{ borderTop: '3px solid #22c55e' }}>
+                  <div className="info-card-label">Avance Speckle</div>
+                  <div className="info-card-value" style={{ color: '#22c55e' }}>{speckleStats.avance}%</div>
                 </div>
-              ))}
+              )}
             </div>
           )}
 
-          {/* TAB DASHBOARD BI */}
-          {activeTab === 'dashboard' && (
-            <>
-              {speckleLoading ? (
-                <div style={{ padding: 24, textAlign: 'center', color: '#94a3b8' }}>
-                  <div className="loading-spinner" style={{ margin: '0 auto 8px' }} />
-                  <div style={{ fontSize: 12 }}>Cargando desde Speckle...</div>
-                </div>
-              ) : speckleError ? (
-                <div style={{ padding: 12, background: '#fee2e2', borderRadius: 8, fontSize: 12, color: '#ef4444' }}>
-                  ⚠️ {speckleError}
-                  <button onClick={() => loadSpeckle(
-                    import.meta.env.VITE_SPECKLE_PROJECT_ID,
-                    import.meta.env.VITE_SPECKLE_MODEL_ID
-                  )}
-                    style={{ display: 'block', marginTop: 8, padding: '4px 10px', background: '#ef4444', color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 11 }}>
-                    Reintentar
-                  </button>
-                </div>
-              ) : (
-                <SpeckleDashboard
-                  elementos={speckleEls}
-                  stats={speckleStats}
-                  lastSync={lastSync}
-                  projectName={projectName}
-                  onEstadoChange={handleSpeckleEstadoChange}
-                />
-              )}
-            </>
-          )}
+          <div className="viewer-container" style={{ position: 'relative' }}>
+            <div id="viewer-canvas" style={{ position: 'absolute', inset: 0 }} />
 
-        </div>
-      </aside>
+            {!currentModel && !loading && (
+              <div className="upload-state" style={{ position: 'absolute', inset: 0, zIndex: 10 }}
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={e => e.preventDefault()}
+                onDrop={e => { e.preventDefault(); handleFile(e.dataTransfer.files[0]) }}>
+                <div className="upload-card">
+                  <div className="upload-illustration">
+                    <img src="/upload-illustration.svg" alt="" style={{ width: 100 }} />
+                  </div>
+                  <div className="upload-title">Carga tu modelo IFC</div>
+                  <div className="upload-description">Arrastrá tu archivo aquí o hacé clic para seleccionar</div>
+                  <button className="upload-button">Seleccionar archivo</button>
+                  <div className="upload-formats">Formatos soportados: .ifc</div>
+                </div>
+                <input ref={fileInputRef} type="file" accept=".ifc" style={{ display: 'none' }}
+                  onChange={e => handleFile(e.target.files[0])} />
+              </div>
+            )}
 
-      <div className="viewer-area">
-        {currentModel && (
-          <div className="info-cards">
-            <div className="info-card">
-              <div className="info-card-label">Total elementos</div>
-              <div className="info-card-value">{ifcStats.total.toLocaleString()}</div>
-            </div>
-            <div className="info-card">
-              <div className="info-card-label">Volumen hormigón</div>
-              <div className="info-card-value">{ifcStats.volume > 0 ? ifcStats.volume.toFixed(1) : '0'} <small style={{ fontSize: '1rem' }}>m³</small></div>
-            </div>
-            <div className="info-card">
-              <div className="info-card-label">Hormigón detectado</div>
-              <div className="info-card-value">{ifcStats.concrete}</div>
-            </div>
-            <div className="info-card">
-              <div className="info-card-label">Archivo</div>
-              <div className="info-card-value" style={{ fontSize: '1.2rem' }}>{fileSize}</div>
-            </div>
-            {speckleStats.total > 0 && (
-              <div className="info-card" style={{ borderTop: '3px solid #22c55e' }}>
-                <div className="info-card-label">Avance Speckle</div>
-                <div className="info-card-value" style={{ color: '#22c55e' }}>{speckleStats.avance}%</div>
+            {loading && (
+              <div className="loading-overlay" style={{ position: 'absolute', inset: 0, zIndex: 20, display: 'flex' }}>
+                <div className="loading-content">
+                  <div className="loading-spinner" />
+                  <div className="loading-text">Cargando modelo...</div>
+                </div>
+              </div>
+            )}
+
+            {currentModel && (
+              <div className="viewer-controls">
+                <button className="control-btn" title="Zoom +" onClick={() => viewerRef.current?.context.ifcCamera.cameraControls.zoom(1.5, true)}>＋</button>
+                <button className="control-btn" title="Zoom -" onClick={() => viewerRef.current?.context.ifcCamera.cameraControls.zoom(-1.5, true)}>－</button>
+                <div className="control-divider" />
+                <button className="control-btn" title="Frente" onClick={() => {
+                  const ctrl = viewerRef.current?.context.ifcCamera.cameraControls
+                  const box = new THREE.Box3().setFromObject(currentModel)
+                  const c = box.getCenter(new THREE.Vector3()), s = box.getSize(new THREE.Vector3())
+                  ctrl.setLookAt(c.x, c.y, c.z + s.z * 2, c.x, c.y, c.z, true)
+                }}>⬜</button>
+                <button className="control-btn" title="Arriba" onClick={() => {
+                  const ctrl = viewerRef.current?.context.ifcCamera.cameraControls
+                  const box = new THREE.Box3().setFromObject(currentModel)
+                  const c = box.getCenter(new THREE.Vector3()), s = box.getSize(new THREE.Vector3())
+                  ctrl.setLookAt(c.x, c.y + s.y * 2, c.z, c.x, c.y, c.z, true)
+                }}>🔲</button>
+                <button className="control-btn" title="Lateral" onClick={() => {
+                  const ctrl = viewerRef.current?.context.ifcCamera.cameraControls
+                  const box = new THREE.Box3().setFromObject(currentModel)
+                  const c = box.getCenter(new THREE.Vector3()), s = box.getSize(new THREE.Vector3())
+                  ctrl.setLookAt(c.x + s.x * 2, c.y, c.z, c.x, c.y, c.z, true)
+                }}>▭</button>
+                <button className="control-btn" title="Encuadrar" onClick={async () => {
+                  const box = new THREE.Box3().setFromObject(currentModel)
+                  await viewerRef.current?.context.ifcCamera.cameraControls.fitToBox(box, true)
+                }}>⊙</button>
               </div>
             )}
           </div>
-        )}
-
-        <div className="viewer-container" style={{ position: 'relative' }}>
-          <div id="viewer-canvas" style={{ position: 'absolute', inset: 0 }} />
-
-          {!currentModel && !loading && (
-            <div className="upload-state" style={{ position: 'absolute', inset: 0, zIndex: 10 }}
-              onClick={() => fileInputRef.current?.click()}
-              onDragOver={e => e.preventDefault()}
-              onDrop={e => { e.preventDefault(); handleFile(e.dataTransfer.files[0]) }}>
-              <div className="upload-card">
-                <div className="upload-illustration">
-                  <img src="/upload-illustration.svg" alt="" style={{ width: 100 }} />
-                </div>
-                <div className="upload-title">Carga tu modelo IFC</div>
-                <div className="upload-description">Arrastrá tu archivo aquí o hacé clic para seleccionar</div>
-                <button className="upload-button">Seleccionar archivo</button>
-                <div className="upload-formats">Formatos soportados: .ifc</div>
-              </div>
-              <input ref={fileInputRef} type="file" accept=".ifc" style={{ display: 'none' }}
-                onChange={e => handleFile(e.target.files[0])} />
-            </div>
-          )}
-
-          {loading && (
-            <div className="loading-overlay" style={{ position: 'absolute', inset: 0, zIndex: 20, display: 'flex' }}>
-              <div className="loading-content">
-                <div className="loading-spinner" />
-                <div className="loading-text">Cargando modelo...</div>
-              </div>
-            </div>
-          )}
-
-          {currentModel && (
-            <div className="viewer-controls">
-              <button className="control-btn" title="Zoom +" onClick={() => viewerRef.current?.context.ifcCamera.cameraControls.zoom(1.5, true)}>＋</button>
-              <button className="control-btn" title="Zoom -" onClick={() => viewerRef.current?.context.ifcCamera.cameraControls.zoom(-1.5, true)}>－</button>
-              <div className="control-divider" />
-              <button className="control-btn" title="Frente" onClick={() => {
-                const ctrl = viewerRef.current?.context.ifcCamera.cameraControls
-                const box = new THREE.Box3().setFromObject(currentModel)
-                const c = box.getCenter(new THREE.Vector3()), s = box.getSize(new THREE.Vector3())
-                ctrl.setLookAt(c.x, c.y, c.z + s.z * 2, c.x, c.y, c.z, true)
-              }}>⬜</button>
-              <button className="control-btn" title="Arriba" onClick={() => {
-                const ctrl = viewerRef.current?.context.ifcCamera.cameraControls
-                const box = new THREE.Box3().setFromObject(currentModel)
-                const c = box.getCenter(new THREE.Vector3()), s = box.getSize(new THREE.Vector3())
-                ctrl.setLookAt(c.x, c.y + s.y * 2, c.z, c.x, c.y, c.z, true)
-              }}>🔲</button>
-              <button className="control-btn" title="Lateral" onClick={() => {
-                const ctrl = viewerRef.current?.context.ifcCamera.cameraControls
-                const box = new THREE.Box3().setFromObject(currentModel)
-                const c = box.getCenter(new THREE.Vector3()), s = box.getSize(new THREE.Vector3())
-                ctrl.setLookAt(c.x + s.x * 2, c.y, c.z, c.x, c.y, c.z, true)
-              }}>▭</button>
-              <button className="control-btn" title="Encuadrar" onClick={async () => {
-                const box = new THREE.Box3().setFromObject(currentModel)
-                await viewerRef.current?.context.ifcCamera.cameraControls.fitToBox(box, true)
-              }}>⊙</button>
-            </div>
-          )}
         </div>
       </div>
-
     </div>
-  </div>
-)
+  )
 }

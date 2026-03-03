@@ -1,14 +1,19 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 
-console.log('CONFIG CARGADO')
-
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
-  console.log('Token:', env.VITE_SPECKLE_TOKEN)
 
   return {
     plugins: [react()],
+    optimizeDeps: {
+      //exclude: ['web-ifc-viewer', 'web-ifc']
+    },
+    build: {
+      commonjsOptions: {
+        transformMixedEsModules: true,
+      }
+    },
     server: {
       proxy: {
         '/speckle/graphql': {
