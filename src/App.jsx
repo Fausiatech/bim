@@ -407,6 +407,42 @@ export default function App() {
     console.log('tipos únicos en Parking:', [...nombres])
   }
 }
+   const fundacionTipos = ['SFD_Pile_Cap_Rectangle', 'SFD_Round', 'Floor']
+let volumenTotal = 0
+const piezas = []
+
+for (let i = 0; i < containedIds.length; i++) {
+  const rel = await mgr.getItemProperties(modelID, containedIds[i])
+  const structure = await mgr.getItemProperties(modelID, rel.RelatingStructure?.value)
+  if (structure?.Name?.value === 'Parking') {
+    for (const handle of (rel.RelatedElements ?? [])) {
+      const elem = await mgr.getItemProperties(modelID, handle.value)
+      const tipo = elem?.Name?.value?.split(':')?.[0]
+      if (!fundacionTipos.includes(tipo)) continue
+
+      mgr.createSubset({ modelID, ids: [handle.value], scene, removePrevious: false, customID: 'vol-test' })
+      const geo = mgr.getSubset(modelID, undefined, 'vol-test')?.geometry
+      if (geo?.index?.count > 0) {
+        const pos = geo.attributes.position
+        const idx = geo.index.array
+        let vol = 0
+        for (let j = 0; j < idx.length; j += 3) {
+          const ax = pos.getX(idx[j]),   ay = pos.getY(idx[j]),   az = pos.getZ(idx[j])
+          const bx = pos.getX(idx[j+1]), by = pos.getY(idx[j+1]), bz = pos.getZ(idx[j+1])
+          const cx = pos.getX(idx[j+2]), cy = pos.getY(idx[j+2]), cz = pos.getZ(idx[j+2])
+          vol += (ax*(by*cz - bz*cy) + bx*(cy*az - cz*ay) + cx*(ay*bz - az*by)) / 6
+        }
+        const volM3 = Math.abs(vol) * 0.0283168 // pies³ a m³
+        volumenTotal += volM3
+        piezas.push({ nombre: elem?.Name?.value, tipo, volM3: volM3.toFixed(4) })
+      }
+      try { mgr.removeSubset(modelID, undefined, 'vol-test') } catch(_) {}
+    }
+  }
+}
+
+console.log('piezas:', piezas)
+console.log('VOLUMEN TOTAL PARKING (m³):', volumenTotal.toFixed(3))
 
       const subset = mgr.getSubset(modelID, undefined, 'no-walls')
       console.log('subset index count:', subset?.geometry?.index?.count)
