@@ -14,7 +14,7 @@ const CATEGORIES = {
   beams:   { label: 'Vigas',    codes: [160246688],              color: '#2196F3' },
   columns: { label: 'Columnas', codes: [3303938423],             color: '#F44336' },
   slabs:   { label: 'Losas',    codes: [3732776249, 1410488051, 2533272240], color: '#4CAF50' },
-  footings:{ label: 'Zapatas',  codes: [2233826070],             color: '#FF9800' },
+  footings:{ label: 'Fundaciones',  codes: [2233826070],             color: '#FF9800' },
   members: { label: 'Miembros', codes: [3875453745],             color: '#9C27B0' },
   walls:   { label: 'Muros',    codes: [753842376],              color: '#607D8B' },
 }
@@ -82,6 +82,7 @@ export default function App() {
   const [chatInput,     setChatInput]     = useState('')
   const [chatLoading,   setChatLoading]   = useState(false)
   const [wallsVisible,  setWallsVisible]  = useState(true)
+  const [concreteOnly, setConcreteOnly] =   useState(false)
   const [estadoIds,     setEstadoIds]     = useState({})
   const [activeTab,     setActiveTab]     = useState('categorias')
   const [selectedEstado,setSelectedEstado]= useState(null)
@@ -184,6 +185,7 @@ export default function App() {
     const ids = {}
     let total = 0, concrete = 0, steel = 0, none = 0, vol = 0
     const summary = {}, concreteIds = []
+    
 
     for (const [key, cat] of Object.entries(CATEGORIES)) {
       if (key === 'all') continue; ids[key] = []
@@ -234,6 +236,21 @@ export default function App() {
         }
       }
     } catch (e) { console.log('vol geo:', e.message) }
+    // Detectar fundaciones por nombre (IfcSlab con prefijos especiales)
+    const { IFCSLAB } = await import('web-ifc')
+    const allSlabIds = await mgr.getAllItemsOfType(modelID, IFCSLAB, false)
+    const fundacionPrefijos = ['SFD_Pile_Cap_Rectangle', 'SFD_Round', 'SFD_']
+    for (const id of allSlabIds) {
+    try {
+      const props = await mgr.getItemProperties(modelID, id)
+      const nombre = props?.Name?.value ?? ''
+      if (fundacionPrefijos.some(p => nombre.startsWith(p))) {
+      if (!ids['footings'].includes(id)) ids['footings'].push(id)
+    }
+  } catch (_) {}
+}
+console.log('fundaciones detectadas:', ids['footings'].length)
+console.log('ids footings antes de set:', ids['footings']?.length, ids['footings'])
 
     setCategoryIds(ids)
     setIfcStats({ total, volume: geoVol > 0 ? geoVol : vol, concrete, steel, none })
@@ -295,7 +312,7 @@ export default function App() {
   }, [selectedEstado, estadoIds, colorearEstado])
 
   // ── Highlight categoría ─────────────────────────────────
- const highlightCategory = useCallback(async (cat) => {
+  const highlightCategory = useCallback(async (cat) => {
   if (!currentModel || !viewerRef.current) return
   const modelID = currentModel.modelID
   const mgr = viewerRef.current.IFC.loader.ifcManager
@@ -308,15 +325,21 @@ export default function App() {
   if (oldWire) scene.remove(oldWire)
   setSelectedEstado(null)
 
-  // Restaurar visibilidad respetando estado de muros
-  if (wallsVisible) {
-    scene.children.forEach(c => { if (c.modelID === modelID) c.visible = true })
-  } else {
+  // Restaurar visibilidad respetando todos los toggles activos
+  if (concreteOnly) {
+    const concreteSubset = mgr.getSubset(modelID, undefined, 'concrete-only')
+    const concreteUUID = concreteSubset?.uuid
+    scene.children.forEach(c => {
+      if (c.modelID === modelID) c.visible = c.uuid === concreteUUID
+    })
+  } else if (!wallsVisible) {
     const noWalls = mgr.getSubset(modelID, undefined, 'no-walls')
     const noWallsUUID = noWalls?.uuid
     scene.children.forEach(c => {
       if (c.modelID === modelID) c.visible = c.uuid === noWallsUUID
     })
+  } else {
+    scene.children.forEach(c => { if (c.modelID === modelID) c.visible = true })
   }
 
   if (cat === 'all') return
@@ -338,9 +361,11 @@ export default function App() {
     scene.add(wireframe)
   }
 
-}, [currentModel, categoryIds, wallsVisible])
-  // ── Toggle muros ────────────────────────────────────────
- const toggleWalls = useCallback(async () => {
+}, [currentModel, categoryIds, wallsVisible, concreteOnly])
+
+// Togglewalls 
+
+  const toggleWalls = useCallback(async () => {
   if (!currentModel || !viewerRef.current) return
   const modelID = currentModel.modelID
   const mgr = viewerRef.current.IFC.loader.ifcManager
@@ -352,140 +377,22 @@ export default function App() {
 
   try {
     if (!next) {
-      const { IFCSLAB } = await import('web-ifc')
-      const slabIds = await mgr.getAllItemsOfType(modelID, IFCSLAB, false)
-      console.log('slabs:', slabIds.length)
-      const { IFCBEAM, IFCCOLUMN, IFCRELASSOCIATESMATERIAL } = await import('web-ifc')
-
-      const matRelIds = await mgr.getAllItemsOfType(modelID, IFCRELASSOCIATESMATERIAL, false)
-      console.log('total mat relations:', matRelIds.length)
-      for (let i = 0; i < Math.min(5, matRelIds.length); i++) {
-        const rel = await mgr.getItemProperties(modelID, matRelIds[i])
-        const matId = rel.RelatingMaterial?.value
-        if (matId) {
-          const mat = await mgr.getItemProperties(modelID, matId)
-          const layerSetId = mat?.ForLayerSet?.value
-          if (layerSetId) {
-            const layerSet = await mgr.getItemProperties(modelID, layerSetId)
-            console.log('layerSet nombre:', layerSet?.LayerSetName?.value)
-            for (const layerHandle of (layerSet?.MaterialLayers ?? [])) {
-              const layer = await mgr.getItemProperties(modelID, layerHandle.value)
-              const materialId = layer?.Material?.value
-              if (materialId) {
-                const material = await mgr.getItemProperties(modelID, materialId)
-                console.log('material final:', material?.Name?.value)
-              }
-            }
-          }
-        }
-      }
-
-      
-      
+      const { IFCBEAM, IFCCOLUMN, IFCSLAB } = await import('web-ifc')
       const beamIds = await mgr.getAllItemsOfType(modelID, IFCBEAM, false)
       const columnIds = await mgr.getAllItemsOfType(modelID, IFCCOLUMN, false)
+      const slabIds = await mgr.getAllItemsOfType(modelID, IFCSLAB, false)
       const visibleIds = [...beamIds, ...columnIds, ...slabIds]
-      mgr.createSubset({
-        modelID,
-        ids: visibleIds,
-        scene,
-        removePrevious: true,
-        customID: 'no-walls'
-      })
-      const { IFCBUILDINGSTOREY } = await import('web-ifc')
-      const storeyIds = await mgr.getAllItemsOfType(modelID, IFCBUILDINGSTOREY, false)
-      console.log('total pisos:', storeyIds.length)
-      for (const id of storeyIds) {
-      const storey = await mgr.getItemProperties(modelID, id)
-      console.log('piso:', storey?.Name?.value, '| elevation:', storey?.Elevation?.value)
-      }
-      const { IFCRELCONTAINEDINSPATIALSTRUCTURE } = await import('web-ifc')
-      const containedIds = await mgr.getAllItemsOfType(modelID, IFCRELCONTAINEDINSPATIALSTRUCTURE, false)
-      console.log('total contained relations:', containedIds.length)
-      for (let i = 0; i < Math.min(5, containedIds.length); i++) {
-      const rel = await mgr.getItemProperties(modelID, containedIds[i])
-      const structure = await mgr.getItemProperties(modelID, rel.RelatingStructure?.value)
-      console.log('nivel:', structure?.Name?.value, '| elementos:', rel.RelatedElements?.length)
-      }
-      // Ver elementos del nivel Parking
-      for (let i = 0; i < containedIds.length; i++) {
-      const rel = await mgr.getItemProperties(modelID, containedIds[i])
-      const structure = await mgr.getItemProperties(modelID, rel.RelatingStructure?.value)
-      if (structure?.Name?.value === 'Parking') {
-      console.log('Parking elementos:', rel.RelatedElements?.length)
-    // Ver los primeros 5 elementos
-      for (let j = 0; j < Math.min(5, rel.RelatedElements?.length ?? 0); j++) {
-      const elemId = rel.RelatedElements[j].value
-      const elem = await mgr.getItemProperties(modelID, elemId)
-      console.log('elemento:', elem?.constructor?.name, '| type:', elem?.type, '| Name:', elem?.Name?.value)
-    }
-  }
-}
-      for (let i = 0; i < containedIds.length; i++) {
-      const rel = await mgr.getItemProperties(modelID, containedIds[i])
-      const structure = await mgr.getItemProperties(modelID, rel.RelatingStructure?.value)
-      if (structure?.Name?.value === 'Parking') {
-      const nombres = new Set()
-      for (const handle of (rel.RelatedElements ?? [])) {
-      const elem = await mgr.getItemProperties(modelID, handle.value)
-      const nombre = elem?.Name?.value ?? 'sin nombre'
-      // Extraer solo el prefijo del nombre (antes de los dos puntos)
-      nombres.add(nombre.split(':')[0])
-    }
-    console.log('tipos únicos en Parking:', [...nombres])
-  }
-}
-   const fundacionTipos = ['SFD_Pile_Cap_Rectangle', 'SFD_Round', 'Floor']
-let volumenTotal = 0
-const piezas = []
 
-for (let i = 0; i < containedIds.length; i++) {
-  const rel = await mgr.getItemProperties(modelID, containedIds[i])
-  const structure = await mgr.getItemProperties(modelID, rel.RelatingStructure?.value)
-  if (structure?.Name?.value === 'Parking') {
-    for (const handle of (rel.RelatedElements ?? [])) {
-      const elem = await mgr.getItemProperties(modelID, handle.value)
-      const tipo = elem?.Name?.value?.split(':')?.[0]
-      if (!fundacionTipos.includes(tipo)) continue
-
-      mgr.createSubset({ modelID, ids: [handle.value], scene, removePrevious: false, customID: 'vol-test' })
-      const geo = mgr.getSubset(modelID, undefined, 'vol-test')?.geometry
-      if (geo?.index?.count > 0) {
-        const pos = geo.attributes.position
-        const idx = geo.index.array
-        let vol = 0
-        for (let j = 0; j < idx.length; j += 3) {
-          const ax = pos.getX(idx[j]),   ay = pos.getY(idx[j]),   az = pos.getZ(idx[j])
-          const bx = pos.getX(idx[j+1]), by = pos.getY(idx[j+1]), bz = pos.getZ(idx[j+1])
-          const cx = pos.getX(idx[j+2]), cy = pos.getY(idx[j+2]), cz = pos.getZ(idx[j+2])
-          vol += (ax*(by*cz - bz*cy) + bx*(cy*az - cz*ay) + cx*(ay*bz - az*by)) / 6
-        }
-        const volM3 = Math.abs(vol) * 0.0283168 // pies³ a m³
-        volumenTotal += volM3
-        piezas.push({ nombre: elem?.Name?.value, tipo, volM3: volM3.toFixed(4) })
-      }
-      try { mgr.removeSubset(modelID, undefined, 'vol-test') } catch(_) {}
-    }
-  }
-}
-
-console.log('piezas:', piezas)
-console.log('VOLUMEN TOTAL PARKING (m³):', volumenTotal.toFixed(3))
+      mgr.createSubset({ modelID, ids: visibleIds, scene, removePrevious: true, customID: 'no-walls' })
 
       const subset = mgr.getSubset(modelID, undefined, 'no-walls')
-      console.log('subset index count:', subset?.geometry?.index?.count)
       const subsetUUID = subset?.uuid
-
       scene.children.forEach(c => {
-        if (c.modelID === modelID) {
-          c.visible = c.uuid === subsetUUID
-        }
+        if (c.modelID === modelID) c.visible = c.uuid === subsetUUID
       })
 
     } else {
-      scene.children.forEach(c => {
-        if (c.modelID === modelID) c.visible = true
-      })
+      scene.children.forEach(c => { if (c.modelID === modelID) c.visible = true })
       try { mgr.removeSubset(modelID, undefined, 'no-walls') } catch (_) {}
     }
 
@@ -493,6 +400,71 @@ console.log('VOLUMEN TOTAL PARKING (m³):', volumenTotal.toFixed(3))
 
   } catch (e) { console.error('toggleWalls:', e.message) }
 }, [currentModel, categoryIds, wallsVisible])
+
+   // ── Togggle concrete only ─────────────────────────────────────
+   const toggleConcreteOnly = useCallback(async () => {
+  if (!currentModel || !viewerRef.current) return
+  const modelID = currentModel.modelID
+  const mgr = viewerRef.current.IFC.loader.ifcManager
+  const scene = getScene()
+  const next = !concreteOnly
+  console.log('footings ids:', categoryIds['footings']?.length, categoryIds['footings'])
+
+  try {
+    if (next) {
+      const { IFCRELASSOCIATESMATERIAL } = await import('web-ifc')
+      const matRelIds = await mgr.getAllItemsOfType(modelID, IFCRELASSOCIATESMATERIAL, false)
+      const concreteIds = []
+
+      for (const matRelId of matRelIds) {
+        const rel = await mgr.getItemProperties(modelID, matRelId)
+        const matId = rel.RelatingMaterial?.value
+        if (!matId) continue
+        const mat = await mgr.getItemProperties(modelID, matId)
+        const layerSetId = mat?.ForLayerSet?.value
+        if (!layerSetId) continue
+        const layerSet = await mgr.getItemProperties(modelID, layerSetId)
+        for (const layerHandle of (layerSet?.MaterialLayers ?? [])) {
+          const layer = await mgr.getItemProperties(modelID, layerHandle.value)
+          const materialId = layer?.Material?.value
+          if (!materialId) continue
+          const material = await mgr.getItemProperties(modelID, materialId)
+          const nombre = material?.Name?.value?.toLowerCase() ?? ''
+          if (nombre.includes('concret') || nombre.includes('hormig')) {
+            for (const objHandle of (rel.RelatedObjects ?? [])) {
+              concreteIds.push(objHandle.value)
+            }
+          }
+        }
+      }
+
+      console.log('concrete ids:', concreteIds.length)
+      // Agregar fundaciones que sabemos son de hormigón
+      for (const id of (categoryIds['footings'] ?? [])) {
+      if (!concreteIds.includes(id)) concreteIds.push(id)
+      }
+      console.log('concrete ids total con fundaciones:', concreteIds.length)
+
+      if (!concreteIds.length) return
+
+      mgr.createSubset({ modelID, ids: concreteIds, scene, removePrevious: true, customID: 'concrete-only' })
+      const subset = mgr.getSubset(modelID, undefined, 'concrete-only')
+      const subsetUUID = subset?.uuid
+      scene.children.forEach(c => {
+        if (c.modelID === modelID) c.visible = c.uuid === subsetUUID
+      })
+
+    } else {
+      scene.children.forEach(c => { if (c.modelID === modelID) c.visible = true })
+      try { mgr.removeSubset(modelID, undefined, 'concrete-only') } catch (_) {}
+    }
+
+    setConcreteOnly(next)
+
+  } catch (e) { console.error('toggleConcreteOnly:', e.message) }
+}, [currentModel, concreteOnly, categoryIds])
+ 
+
   // ── Handle IFC file ─────────────────────────────────────
   const handleFile = async (file) => {
     if (!file || !viewerRef.current) return
@@ -618,15 +590,23 @@ console.log('VOLUMEN TOTAL PARKING (m³):', volumenTotal.toFixed(3))
               </div>
 
               {currentModel && (
-                <div className="tree-section">
-                  <div className="tree-section-title">Visibilidad</div>
+               <div className="tree-section">
+                <div className="tree-section-title">Visibilidad</div>
                   <div className={`cat-item tree-item${!wallsVisible ? ' active' : ''}`} onClick={toggleWalls}>
-                    <span>{wallsVisible ? '👁 Muros visibles' : '🚫 Muros ocultos'}</span>
-                    <span className="cat-count">{categoryIds['walls']?.length ?? 0}</span>
-                  </div>
-                </div>
-              )}
+                 <span>{wallsVisible ? '👁 Muros visibles' : '🚫 Muros ocultos'}</span>
+               <span className="cat-count">{categoryIds['walls']?.length ?? 0}</span>
+           </div>
+          </div>
+          )}
 
+             {currentModel && (
+               <div className="tree-section">
+                 <div className="tree-section-title">Material</div>
+                   <div className={`cat-item tree-item${concreteOnly ? ' active' : ''}`} onClick={toggleConcreteOnly}>
+                 <span>{concreteOnly ? '🧱 Solo hormigón' : '👁 Todos los materiales'}</span>
+               </div>
+             </div>
+            )}
               {currentModel && Object.keys(estadoIds).length > 0 && (
                 <div className="tree-section">
                   <div className="tree-section-title">Estado de Obra</div>
