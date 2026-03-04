@@ -295,22 +295,50 @@ export default function App() {
   }, [selectedEstado, estadoIds, colorearEstado])
 
   // ── Highlight categoría ─────────────────────────────────
-  const highlightCategory = useCallback(async (cat) => {
-    if (!currentModel || !viewerRef.current) return
-    const modelID = currentModel.modelID
-    const mgr = viewerRef.current.IFC.loader.ifcManager
-    const scene = getScene()
-    Object.keys(ESTADOS_IFC).forEach(k => { try { mgr.removeSubset(modelID, undefined, `est-${k}`) } catch (_) {} })
-    try { mgr.removeSubset(modelID, undefined, 'highlight') } catch (_) {}
-    setSelectedEstado(null)
-    if (cat === 'all') return
-    const ids = categoryIds[cat] ?? []
-    if (!ids.length) return
-    const mat = new THREE.MeshLambertMaterial({ color: new THREE.Color(CATEGORIES[cat].color), transparent: true, opacity: 0.9 })
-    try { mgr.createSubset({ modelID, ids, material: mat, scene, removePrevious: true, customID: 'highlight' }) }
-    catch (e) { console.error('highlight:', e.message) }
-  }, [currentModel, categoryIds])
+ const highlightCategory = useCallback(async (cat) => {
+  if (!currentModel || !viewerRef.current) return
+  const modelID = currentModel.modelID
+  const mgr = viewerRef.current.IFC.loader.ifcManager
+  const scene = getScene()
 
+  // Limpiar subsets y wireframe anteriores
+  Object.keys(ESTADOS_IFC).forEach(k => { try { mgr.removeSubset(modelID, undefined, `est-${k}`) } catch (_) {} })
+  try { mgr.removeSubset(modelID, undefined, 'highlight') } catch (_) {}
+  const oldWire = scene.getObjectByName('wire-highlight')
+  if (oldWire) scene.remove(oldWire)
+  setSelectedEstado(null)
+
+  // Restaurar visibilidad respetando estado de muros
+  if (wallsVisible) {
+    scene.children.forEach(c => { if (c.modelID === modelID) c.visible = true })
+  } else {
+    const noWalls = mgr.getSubset(modelID, undefined, 'no-walls')
+    const noWallsUUID = noWalls?.uuid
+    scene.children.forEach(c => {
+      if (c.modelID === modelID) c.visible = c.uuid === noWallsUUID
+    })
+  }
+
+  if (cat === 'all') return
+
+  const ids = categoryIds[cat] ?? []
+  console.log('highlight cat:', cat, '| ids:', ids.length)
+  if (!ids.length) return
+
+  // Crear subset y wireframe encima
+  mgr.createSubset({ modelID, ids, scene, removePrevious: true, customID: 'highlight' })
+  const subsetMesh = mgr.getSubset(modelID, undefined, 'highlight')
+  if (subsetMesh) {
+    const wire = new THREE.WireframeGeometry(subsetMesh.geometry)
+    const lineMat = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 1 })
+    const wireframe = new THREE.LineSegments(wire, lineMat)
+    wireframe.name = 'wire-highlight'
+    wireframe.position.copy(subsetMesh.position)
+    wireframe.rotation.copy(subsetMesh.rotation)
+    scene.add(wireframe)
+  }
+
+}, [currentModel, categoryIds, wallsVisible])
   // ── Toggle muros ────────────────────────────────────────
  const toggleWalls = useCallback(async () => {
   if (!currentModel || !viewerRef.current) return
