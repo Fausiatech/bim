@@ -31,6 +31,12 @@ export function useIfc({ viewerRef, currentModel, categoryIds, wallsVisible, con
     let total = 0, concrete = 0, steel = 0, none = 0, vol = 0
     const summary = {}, concreteIds = []
 
+  const firstSlab = ids['slabs']?.[0]
+if (firstSlab) {
+  const props = await mgr.getItemProperties(modelID, firstSlab, false)
+  const psets = await mgr.getPropertySets(modelID, firstSlab, false)
+}
+
     for (const [key, cat] of Object.entries(CATEGORIES)) {
       if (key === 'all') continue
       ids[key] = []
@@ -87,8 +93,51 @@ export function useIfc({ viewerRef, currentModel, categoryIds, wallsVisible, con
         } catch (_) {}
       }
     }
+     try {
+      const testId = ids['slabs']?.[0] ?? ids['beams']?.[0]
+      
+      if (testId) {
+        const p = await mgr.getItemProperties(modelID, testId, false)
+        
+      }
+    } catch(e) { console.log('test error:', e.message) }
+    try {
+  const testId = ids['slabs']?.[0]
+  if (testId) {
+    const { IFCRELCONTAINEDINSPATIALSTRUCTURE } = await import('web-ifc')
+    const rels = await mgr.getAllItemsOfType(modelID, IFCRELCONTAINEDINSPATIALSTRUCTURE, false)
+    for (const relId of rels.slice(0, 20)) {
+      const rel = await mgr.getItemProperties(modelID, relId, false)
+      
+    }
+  }
+} catch(e) { console.log('nivel error:', e.message) }
 
-    
+const floorIds = [39, 43, 47, 51, 54, 58, 62, 66, 70, 74, 78, 82]
+for (const fId of floorIds) {
+  const fp = await mgr.getItemProperties(modelID, fId, false)
+  
+}
+// Construir mapa elementId → piso
+const { IFCRELCONTAINEDINSPATIALSTRUCTURE, IFCBUILDINGSTOREY } = await import('web-ifc')
+const storeyIds = await mgr.getAllItemsOfType(modelID, IFCBUILDINGSTOREY, false)
+const floors = {}
+for (const fId of storeyIds) {
+  const fp = await mgr.getItemProperties(modelID, fId, false)
+  floors[fId] = { name: fp?.Name?.value ?? `Piso ${fId}`, elevation: fp?.Elevation?.value ?? 0 }
+}
+
+const elementFloor = {} // elementId → { name, elevation }
+const rels = await mgr.getAllItemsOfType(modelID, IFCRELCONTAINEDINSPATIALSTRUCTURE, false)
+for (const relId of rels) {
+  const rel = await mgr.getItemProperties(modelID, relId, false)
+  const floorId = rel?.RelatingStructure?.value
+  if (!floorId || !floors[floorId]) continue
+  for (const el of (rel.RelatedElements ?? [])) {
+    elementFloor[el.value] = floors[floorId]
+  }
+}
+
 
     // Volumen geométrico
     let geoVol = 0
