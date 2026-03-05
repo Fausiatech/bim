@@ -74,7 +74,7 @@ export default function App() {
     viewerRef, currentModel, categoryIds, wallsVisible, concreteOnly,
     selectedEstado, setSelectedEstado, setCategoryIds, setIfcStats,
     setEstadoIds, setRemitos, setModelData, setChatMessages,
-    iniciarGPS, generarRemitos, setActiveTab, supabase, currentUser, currentCat
+    iniciarGPS, generarRemitos, setActiveTab, supabase, currentUser, currentCat, setWallsVisible, setConcreteOnly
   })
   // ── Speckle ─────────────────────────────────────────────
   useEffect(() => {

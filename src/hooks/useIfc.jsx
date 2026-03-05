@@ -5,7 +5,7 @@ import { CATEGORIES, ESTADOS_IFC } from '../constants'
 export function useIfc({ viewerRef, currentModel, categoryIds, wallsVisible, concreteOnly,
   selectedEstado, setSelectedEstado, setCategoryIds, setIfcStats, setEstadoIds, setRemitos,
   setModelData, setChatMessages, iniciarGPS, generarRemitos, setActiveTab,
-  supabase, currentUser, currentCat }) {
+  supabase, currentUser, currentCat, setWallsVisible, setConcreteOnly}) {
 
   const getScene = () =>
     viewerRef.current?.context?.scene?.scene ??
