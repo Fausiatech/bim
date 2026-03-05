@@ -9,6 +9,7 @@ export default function Sidebar({
   categoryIds, totalCatIds,
   currentCat, setCurrentCat,
   highlightCategory,
+  categoryLabels,
   // visibilidad
   wallsVisible, toggleWalls,
   concreteOnly, toggleConcreteOnly,
@@ -77,7 +78,7 @@ export default function Sidebar({
             {Object.entries(CATEGORIES).map(([key, cat]) => (
               <div key={key} className={`cat-item tree-item${currentCat === key ? ' active' : ''}`}
                 onClick={async () => { if (!currentModel) return; setCurrentCat(key); await highlightCategory(key) }}>
-                <span>{cat.label}</span>
+                <span>{categoryLabels?.[key] ?? cat.label}</span>
                 <span className="cat-count">{key === 'all' ? totalCatIds : (categoryIds[key]?.length ?? 0)}</span>
               </div>
             ))}
@@ -96,7 +97,7 @@ export default function Sidebar({
           {currentModel && (
             <div className="tree-section">
               <div className="tree-section-title">Material</div>
-              <div className={`cat-item tree-item${concreteOnly ? ' active' : ''}`} onClick={toggleConcreteOnly}>
+              <div className={`cat-item tree-item${concreteOnly ? ' active' : ''}`} onClick={() => toggleConcreteOnly(!concreteOnly)}>
                 <span>{concreteOnly ? '🧱 Solo hormigón' : '👁 Todos los materiales'}</span>
               </div>
             </div>

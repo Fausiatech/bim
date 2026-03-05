@@ -1,22 +1,21 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import * as THREE from 'three'
 import { IfcViewerAPI } from 'web-ifc-viewer'
-import { createClient } from '@supabase/supabase-js'
 import { useSpeckle } from './hooks/useSpeckle'
 import { useGps } from './hooks/useGps'
-import { useIfc } from './hooks/useIfc'
+import { useIfc } from './hooks/useIfc.jsx'
 import Sidebar from './components/Sidebar'
 import ViewerArea from './components/ViewerArea'
 import { API_URL } from './constants'
 import './App.css'
-
-const supabase = createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY)
+import { supabase } from './lib/supabase'
 
 function generarRemitos(estadoIds) {
   const RESISTENCIAS = ['H-17', 'H-21', 'H-25', 'H-30', 'H-35']
   const PATENTES     = ['AA 123 BB', 'CC 456 DD', 'EE 789 FF', 'GG 012 HH']
   const CHOFERES     = ['García, Carlos', 'López, Mario', 'Fernández, Juan', 'Rodríguez, Pedro']
   const remitos = []; let nro = 1001; const now = new Date()
+  
   for (const id of (estadoIds.entregado || [])) {
     const f = new Date(now - Math.random() * 7 * 86400000)
     remitos.push({
@@ -42,6 +41,7 @@ function generarRemitos(estadoIds) {
 export default function App() {
   const viewerRef    = useRef(null)
   const fileInputRef = useRef(null)
+  const [categoryLabels, setCategoryLabels] = useState({}) 
 
   const [currentModel,   setCurrentModel]   = useState(null)
   const [currentCat,     setCurrentCat]     = useState('all')
@@ -74,7 +74,8 @@ export default function App() {
     viewerRef, currentModel, categoryIds, wallsVisible, concreteOnly,
     selectedEstado, setSelectedEstado, setCategoryIds, setIfcStats,
     setEstadoIds, setRemitos, setModelData, setChatMessages,
-    iniciarGPS, generarRemitos, setActiveTab, supabase, currentUser, currentCat, setWallsVisible, setConcreteOnly
+    iniciarGPS, generarRemitos, setActiveTab, supabase, currentUser, currentCat, setWallsVisible, setConcreteOnly, setCategoryLabels
+    
   })
   // ── Speckle ─────────────────────────────────────────────
   useEffect(() => {

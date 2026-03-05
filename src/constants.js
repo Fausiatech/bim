@@ -1,11 +1,11 @@
 export const CATEGORIES = {
-  all:      { label: 'Todo',        codes: [160246688, 3303938423, 3732776249, 2233826070, 3875453745, 753842376], color: null },
-  beams:    { label: 'Vigas',       codes: [160246688],                          color: '#2196F3' },
-  columns:  { label: 'Columnas',    codes: [3303938423],                         color: '#F44336' },
-  slabs:    { label: 'Losas',       codes: [3732776249, 1410488051, 2533272240], color: '#4CAF50' },
-  footings: { label: 'Fundaciones', codes: [2233826070],                         color: '#FF9800' },
-  members:  { label: 'Miembros',    codes: [3875453745],                         color: '#9C27B0' },
-  walls:    { label: 'Muros',       codes: [753842376],                          color: '#607D8B' },
+  all:      { label: 'Todo',        codes: null,                                                    color: null },
+  beams:    { label: 'Vigas',       codes: ['IFCBEAM'],                                             color: '#2196F3' },
+  columns:  { label: 'Columnas',    codes: ['IFCCOLUMN'],                                           color: '#F44336' },
+  slabs:    { label: 'Losas',       codes: ['IFCSLAB'],                                             color: '#4CAF50' },
+  footings: { label: 'Fundaciones', codes: ['IFCFOOTING'],                                          color: '#FF9800' },
+  members:  { label: 'Perfiles secundarios', codes: ['IFCMEMBER'],                                  color: '#9C27B0' },
+  walls:    { label: 'Muros',       codes: ['IFCWALL', 'IFCWALLSTANDARDCASE'],                      color: '#607D8B' },
 }
 
 export const ESTADOS_IFC = {
