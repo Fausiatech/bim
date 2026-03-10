@@ -1,10 +1,13 @@
 import { createRoot } from 'react-dom/client'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import App from './App.jsx'
+import Marketplace from './pages/Marketplace.jsx'
 
-console.log('ANTES DE IMPORTAR APP')
-import('./App.jsx').then(m => {
-  console.log('APP IMPORTADO:', m)
-  createRoot(document.getElementById('root')).render(<m.default />)
-}).catch(e => {
-  console.error('FALLO IMPORT APP:', e)
-  document.getElementById('root').innerHTML = '<pre style="color:red;background:white">' + e.message + '\n' + e.stack + '</pre>'
-})
+createRoot(document.getElementById('root')).render(
+  <BrowserRouter>
+    <Routes>
+      <Route path="/" element={<App />} />
+      <Route path="/marketplace" element={<Marketplace />} />
+    </Routes>
+  </BrowserRouter>
+)

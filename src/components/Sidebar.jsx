@@ -1,5 +1,7 @@
 import SpeckleDashboard from './SpeckleDashboard'
 import { CATEGORIES, ESTADOS_IFC, OBRA, PLANTA } from '../constants'
+import GanttColado from './GanttColado'
+import PedidosContratista from './PedidosContratista'
 
 export default function Sidebar({
   // tabs
@@ -27,6 +29,15 @@ export default function Sidebar({
   speckleEls, speckleLoading, speckleError,
   speckleStats, lastSync, projectName,
   loadSpeckle, handleSpeckleEstadoChange,
+  elementFloor,
+  concreteIds,
+  onSelectionChange,
+  onPedidoEstado,
+  // nuevas props auth + marketplace
+  user,
+  ifcViewer,
+  onAdjudicarCotizacion,
+  ifcStats,
 }) {
   const gpsBannerColor = camionEstado === 'proximo' ? '#FFC107' : camionEstado === 'entregado' ? '#4CAF50' : '#607D8B'
   const gpsBannerText = camionEstado === 'proximo'
@@ -36,8 +47,10 @@ export default function Sidebar({
 
   const sidebarTabs = [
     ['categorias', 'Modelo'],
+    ['colado',     'Colado'],
+    ['pedidos',    'Pedidos'],
     ['remitos',    'Remitos'],
-    ['dashboard',  '📊 BI'],
+    ['dashboard',  'BI'],
   ]
 
   return (
@@ -52,8 +65,8 @@ export default function Sidebar({
         <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.75rem' }}>
           {sidebarTabs.map(([k, l]) => (
             <button key={k} onClick={() => setActiveTab(k)} style={{
-              flex: 1, padding: '0.3rem 0.2rem', border: 'none', borderRadius: 6, cursor: 'pointer',
-              fontSize: '0.72rem', fontWeight: 600,
+              flex: 1, padding: '0.25rem 0.1rem', border: 'none', borderRadius: 6, cursor: 'pointer',
+              fontSize: '0.65rem', fontWeight: 600,
               background: activeTab === k ? 'var(--primary)' : 'var(--border)',
               color: activeTab === k ? 'white' : 'var(--text-gray)'
             }}>{l}</button>
@@ -109,8 +122,7 @@ export default function Sidebar({
               <div style={{ fontSize: '0.75rem', color: 'var(--text-gray)', padding: '0 0.5rem 0.5rem', lineHeight: 1.4 }}>
                 Clic para colorear en modelo
               </div>
-              
-            {Object.entries(ESTADOS_IFC).map(([key, est]) => (
+              {Object.entries(ESTADOS_IFC).map(([key, est]) => (
                 <div key={key} className={`cat-item tree-item${selectedEstado === key ? ' active' : ''}`}
                   onClick={() => handleEstadoClick(key)} style={{ paddingLeft: '0.75rem' }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -118,10 +130,10 @@ export default function Sidebar({
                     {est.icon} {est.label}
                   </span>
                   <span className="cat-count">{estadoIds[key]?.length ?? 0}</span>
-                </div>   
+                </div>
               ))}
-            </div>       
-          )}            
+            </div>
+          )}
 
           <div className="chat-panel">
             <div className="chat-header">
@@ -141,7 +153,7 @@ export default function Sidebar({
               <button className="chat-send-btn" onClick={sendMessage} disabled={!modelData || chatLoading}>➤</button>
             </div>
           </div>
-</>)}
+        </>)}
 
         {/* TAB REMITOS */}
         {activeTab === 'remitos' && (
@@ -157,22 +169,20 @@ export default function Sidebar({
               <div style={{ color: 'var(--text-gray)', fontSize: '0.85rem', padding: '0.5rem' }}>Sin remitos</div>
             )}
             {remitosFiltered.map((r, i) => (
-              <div key={i} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '0.75rem', marginBottom: '0.5rem', background: 'white', fontSize: '0.8rem' }}>
+              <div key={r.id ?? i} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '0.75rem', marginBottom: '0.5rem', background: 'white', fontSize: '0.8rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', alignItems: 'center' }}>
-                  <strong>{r.nro}</strong>
+                  <strong>{r.numero ?? r.nro}</strong>
                   <span style={{
-                    background: r.estado === 'entregado' ? '#e8f5e9' : '#fff8e1',
-                    color: r.estado === 'entregado' ? '#2e7d32' : '#f57f17',
+                    background: r.estado === 'entregado' ? '#e8f5e9' : r.estado === 'en_camino' ? '#fff8e1' : '#e0f2fe',
+                    color:      r.estado === 'entregado' ? '#2e7d32' : r.estado === 'en_camino' ? '#f57f17' : '#0369a1',
                     padding: '2px 8px', borderRadius: 10, fontSize: '0.72rem', fontWeight: 600
-                  }}>{ESTADOS_IFC[r.estado].icon} {ESTADOS_IFC[r.estado].label}</span>
+                  }}>{r.estado}</span>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.2rem', color: 'var(--text-gray)' }}>
-                  <span>📅 {r.fecha} {r.hora}</span>
-                  <span>🏗 {r.resistencia} · {r.asentamiento}</span>
-                  <span>🚚 {r.patente}</span>
-                  <span>📦 {r.m3} m³</span>
-                  <span style={{ gridColumn: '1/-1' }}>👤 {r.chofer}</span>
-                  <span style={{ gridColumn: '1/-1', fontSize: '0.7rem', color: '#bbb' }}>ID IFC: {r.elementoId}</span>
+                  <span>📅 {r.fecha_emision ? new Date(r.fecha_emision).toLocaleDateString('es-AR') : r.fecha}</span>
+                  <span>📦 {r.m3_despachado ?? r.m3} m³</span>
+                  <span>💰 ${r.precio_total?.toLocaleString('es-AR')}</span>
+                  <span>🗓 Entrega: {r.fecha_entrega ?? '—'}</span>
                 </div>
               </div>
             ))}
@@ -207,9 +217,27 @@ export default function Sidebar({
           </>
         )}
 
+        {/* TAB COLADO */}
+        {activeTab === 'colado' && (
+          <GanttColado
+            elementFloor={elementFloor}
+            concreteIds={concreteIds}
+            categoryIds={categoryIds}
+            onSelectionChange={onSelectionChange}
+            ifcStats={ifcStats}
+          />
+        )}
+
+        {/* TAB PEDIDOS */}
+        {activeTab === 'pedidos' && (
+          <PedidosContratista
+            user={user}
+            ifcViewer={ifcViewer}
+            onAdjudicarCotizacion={onAdjudicarCotizacion}
+            onEstadoChange={onPedidoEstado}
+          />
+        )}
       </div>
     </aside>
   )
 }
-          
-         

@@ -8,61 +8,42 @@ import Sidebar from './components/Sidebar'
 import ViewerArea from './components/ViewerArea'
 import { API_URL } from './constants'
 import './App.css'
-import { supabase } from './lib/supabase'
+import { supabase } from './supabase'
+import { adjudicarCotizacion } from './utils/adjudicarCotizacion'
+import { fetchProyectosGuardados, getIfcUrl } from './utils/cargarProyectoGuardado'
+import LoginForm from './components/LoginForm'
 
-function generarRemitos(estadoIds) {
-  const RESISTENCIAS = ['H-17', 'H-21', 'H-25', 'H-30', 'H-35']
-  const PATENTES     = ['AA 123 BB', 'CC 456 DD', 'EE 789 FF', 'GG 012 HH']
-  const CHOFERES     = ['García, Carlos', 'López, Mario', 'Fernández, Juan', 'Rodríguez, Pedro']
-  const remitos = []; let nro = 1001; const now = new Date()
-  
-  for (const id of (estadoIds.entregado || [])) {
-    const f = new Date(now - Math.random() * 7 * 86400000)
-    remitos.push({
-      nro: `R-${nro++}`, fecha: f.toLocaleDateString('es-AR'),
-      hora: f.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }),
-      m3: (2 + Math.random() * 6).toFixed(1), resistencia: RESISTENCIAS[Math.floor(Math.random() * 5)],
-      asentamiento: `${6 + Math.floor(Math.random() * 8)} cm`, patente: PATENTES[Math.floor(Math.random() * 4)],
-      chofer: CHOFERES[Math.floor(Math.random() * 4)], elementoId: id, estado: 'entregado'
-    })
-  }
-  for (const id of (estadoIds.en_camino || [])) {
-    remitos.push({
-      nro: `R-${nro++}`, fecha: now.toLocaleDateString('es-AR'),
-      hora: now.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }),
-      m3: (2 + Math.random() * 6).toFixed(1), resistencia: RESISTENCIAS[Math.floor(Math.random() * 5)],
-      asentamiento: `${6 + Math.floor(Math.random() * 8)} cm`, patente: PATENTES[Math.floor(Math.random() * 4)],
-      chofer: CHOFERES[Math.floor(Math.random() * 4)], elementoId: id, estado: 'en_camino'
-    })
-  }
-  return remitos.sort((a, b) => b.nro.localeCompare(a.nro))
-}
+// ── Eliminado: generarRemitos() random ──────────────────────
+// Los remitos ahora se crean en Supabase al adjudicar una cotización
 
 export default function App() {
   const viewerRef    = useRef(null)
   const fileInputRef = useRef(null)
-  const [categoryLabels, setCategoryLabels] = useState({}) 
+  const [categoryLabels, setCategoryLabels] = useState({})
 
-  const [currentModel,   setCurrentModel]   = useState(null)
-  const [currentCat,     setCurrentCat]     = useState('all')
-  const [categoryIds,    setCategoryIds]    = useState({})
-  const [modelData,      setModelData]      = useState(null)
-  const [currentUser,    setCurrentUser]    = useState(null)
-  const [loading,        setLoading]        = useState(false)
-  const [ifcStats,       setIfcStats]       = useState({ total: 0, volume: 0, concrete: 0, steel: 0, none: 0 })
-  const [fileSize,       setFileSize]       = useState('')
-  const [fileName,       setFileName]       = useState('')
-  const [chatMessages,   setChatMessages]   = useState([])
-  const [chatInput,      setChatInput]      = useState('')
-  const [chatLoading,    setChatLoading]    = useState(false)
-  const [wallsVisible,   setWallsVisible]   = useState(true)
-  const [concreteOnly,   setConcreteOnly]   = useState(false)
-  const [estadoIds,      setEstadoIds]      = useState({})
-  const [activeTab,      setActiveTab]      = useState('categorias')
-  const [selectedEstado, setSelectedEstado] = useState(null)
-  const [remitos,        setRemitos]        = useState([])
+  const [currentModel,      setCurrentModel]      = useState(null)
+  const [currentCat,        setCurrentCat]        = useState('all')
+  const [categoryIds,       setCategoryIds]        = useState({})
+  const [modelData,         setModelData]          = useState(null)
+  const [currentUser,       setCurrentUser]        = useState(null)
+  const [loading,           setLoading]            = useState(false)
+  const [ifcStats,          setIfcStats]           = useState({ total: 0, volume: 0, concrete: 0, steel: 0, none: 0 })
+  const [fileSize,          setFileSize]           = useState('')
+  const [fileName,          setFileName]           = useState('')
+  const [chatMessages,      setChatMessages]       = useState([])
+  const [chatInput,         setChatInput]          = useState('')
+  const [chatLoading,       setChatLoading]        = useState(false)
+  const [wallsVisible,      setWallsVisible]       = useState(true)
+  const [concreteOnly,      setConcreteOnly]       = useState(false)
+  const [estadoIds,         setEstadoIds]          = useState({})
+  const [activeTab,         setActiveTab]          = useState('categorias')
+  const [selectedEstado,    setSelectedEstado]     = useState(null)
+  const [remitos,           setRemitos]            = useState([])
+  const [elementFloor,      setElementFloor]       = useState({})
+  const [proyectosGuardados, setProyectosGuardados] = useState([])
+  const [currentStoragePath, setCurrentStoragePath] = useState(null)
 
-  // ── Hooks ───────────────────────────────────────────────
+  // ── Hooks ────────────────────────────────────────────────
   const { camionPos, camionDist, camionEstado, iniciarGPS, resetGPS } = useGps()
 
   const { elementos: speckleEls, loading: speckleLoading, error: speckleError,
@@ -70,14 +51,19 @@ export default function App() {
           setElementos: setSpeckleEls } = useSpeckle()
 
   const { scanModel, colorearEstado, highlightCategory,
-          toggleWalls, toggleConcreteOnly, handleEstadoClick } = useIfc({
+          toggleWalls, toggleConcreteOnly, handleEstadoClick,
+          elementFloorRef, concreteIdsRef } = useIfc({
     viewerRef, currentModel, categoryIds, wallsVisible, concreteOnly,
     selectedEstado, setSelectedEstado, setCategoryIds, setIfcStats,
-    setEstadoIds, setRemitos, setModelData, setChatMessages,
-    iniciarGPS, generarRemitos, setActiveTab, supabase, currentUser, currentCat, setWallsVisible, setConcreteOnly, setCategoryLabels
-    
+    setEstadoIds,
+    setRemitos,   // ahora solo se usa para cargar remitos reales desde Supabase
+    setModelData, setChatMessages,
+    iniciarGPS,
+    setActiveTab, supabase, currentUser,
+    currentCat, setWallsVisible, setConcreteOnly, setCategoryLabels
   })
-  // ── Speckle ─────────────────────────────────────────────
+
+  // ── Speckle ──────────────────────────────────────────────
   useEffect(() => {
     loadSpeckle(
       import.meta.env.VITE_SPECKLE_PROJECT_ID,
@@ -89,16 +75,73 @@ export default function App() {
     setSpeckleEls(prev => prev.map(e => e.id === id ? { ...e, estado } : e))
   }, [setSpeckleEls])
 
-  // ── Supabase auth ───────────────────────────────────────
+  // ── Supabase auth ─────────────────────────────────────────
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => setCurrentUser(session?.user ?? null))
+    // Sesión activa al montar
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const u = session?.user ?? null
+      setCurrentUser(u)
+      if (u) cargarProyectosGuardados(u.id)
+    })
+
+    // Escuchar cambios de sesión (login / logout / token refresh)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      const u = session?.user ?? null
+      setCurrentUser(u)
+      if (u) cargarProyectosGuardados(u.id)
+      else { setProyectosGuardados([]); setCurrentStoragePath(null) }
+    })
+
+    return () => subscription.unsubscribe()
   }, [])
 
-   // ── Supabase storage ────────────────────────────────────
+  // ── Proyectos guardados en Storage ───────────────────────
+  const cargarProyectosGuardados = async (userId) => {
+    const proyectos = await fetchProyectosGuardados(userId)
+    setProyectosGuardados(proyectos)
+  }
+
+  // Cargar un IFC guardado sin que el usuario vuelva a subir el archivo
+  const handleCargarProyectoGuardado = async (proyecto) => {
+  if (!viewerRef.current) return
+  setLoading(true)
+  setFileName(proyecto.file_name)
+  setWallsVisible(true); setEstadoIds({}); setRemitos([]); setSelectedEstado(null)
+  resetGPS()
+  try {
+    const url = getIfcUrl(proyecto.storage_path)
+    const model = await viewerRef.current.IFC.loadIfcUrl(url)
+    setCurrentModel(model)
+    setCurrentStoragePath(proyecto.storage_path)
+    setLoading(false)
+    setTimeout(async () => {
+      try {
+        const box = new THREE.Box3().setFromObject(model)
+        const ctrl = viewerRef.current.context.ifcCamera.cameraControls
+        await ctrl.fitToBox(box, true)
+        const c = box.getCenter(new THREE.Vector3()), s = box.getSize(new THREE.Vector3())
+        ctrl.setLookAt(c.x, c.y + Math.max(s.x, s.y, s.z), c.z + Math.max(s.x, s.y, s.z) * 2, c.x, c.y, c.z, true)
+      } catch (e) { console.log('cam:', e.message) }
+      try {
+        await scanModel(model.modelID, proyecto.file_name, proyecto.storage_path)
+        setElementFloor(elementFloorRef.current)
+      } catch (e) {
+        console.error('scan:', e)
+      } finally {
+        setLoading(false)
+      }
+    }, 2000)
+  } catch (err) {
+    alert('Error al cargar proyecto: ' + err.message)
+    setLoading(false)
+  }
+}
+  // ── Supabase storage (upload nuevo archivo) ──────────────
   const uploadToStorage = async (file) => {
     if (!currentUser) return null
     const path = `${currentUser.id}/${Date.now()}_${file.name}`
-    const { data, error } = await supabase.storage.from('ifc-models').upload(path, file, { upsert: false })
+    const { data, error } = await supabase.storage
+      .from('ifc-models').upload(path, file, { upsert: false })
     if (error) { console.error('Storage:', error.message); return null }
     return data.path
   }
@@ -110,9 +153,11 @@ export default function App() {
       total_elements: total, concrete_volume: vol, summary,
       category: currentCat, created_at: new Date().toISOString()
     })
+    // Refrescar lista de proyectos guardados
+    await cargarProyectosGuardados(currentUser.id)
   }
 
-  // ── IFC viewer init ─────────────────────────────────────
+  // ── IFC viewer init ──────────────────────────────────────
   useEffect(() => {
     if (viewerRef.current) return
     const init = async () => {
@@ -142,9 +187,7 @@ export default function App() {
     return () => { viewerRef.current?.dispose?.() }
   }, [])
 
-  
-
-  // ── Handle IFC file ─────────────────────────────────────
+  // ── Handle IFC file (nuevo upload) ──────────────────────
   const handleFile = async (file) => {
     if (!file || !viewerRef.current) return
     setLoading(true)
@@ -155,7 +198,8 @@ export default function App() {
     const url = URL.createObjectURL(file)
     try {
       const model = await viewerRef.current.IFC.loadIfcUrl(url)
-      setCurrentModel(model); setLoading(false)
+      setCurrentModel(model)
+      setLoading(false)
       setTimeout(async () => {
         try {
           const box = new THREE.Box3().setFromObject(model)
@@ -166,33 +210,72 @@ export default function App() {
         } catch (e) { console.log('cam:', e.message) }
         try {
           const sp = await uploadToStorage(file)
+          setCurrentStoragePath(sp)
           await scanModel(model.modelID, file.name, sp)
+          setElementFloor(elementFloorRef.current)
+          // ifcStats.concrete ya se setea dentro de scanModel vía setIfcStats ✓
         } catch (e) { console.error('scan:', e) }
       }, 2000)
     } catch (err) {
-      alert('Error al cargar: ' + err.message); setLoading(false); URL.revokeObjectURL(url)
+      alert('Error al cargar: ' + err.message)
+      setLoading(false)
+      URL.revokeObjectURL(url)
     }
   }
+ const handleAdjudicarCotizacion = useCallback(async ({ cotizacion, pedido, userOverride }) => {
+  const activeUser = userOverride ?? currentUser
+  if (!activeUser) return alert('Sesión expirada')
+  try {
+    const remito = await adjudicarCotizacion({
+      cotizacion, pedido, user: activeUser,
+      ifcViewer: null
+    })
+    if (pedido.elementos_ifc?.length) {
+      const ids = pedido.elementos_ifc.flatMap(e => e.ids)
+      console.log('llamando colorearEstado adjudicado con ids:', ids)
+      colorearEstado('adjudicado', ids)
+    }
+    setRemitos(prev => [remito, ...prev])
+    setActiveTab('remitos')
+  } catch (err) {
+    console.error(err)
+    alert('Error al adjudicar: ' + err.message)
+  }
+}, [currentUser, currentModel, colorearEstado])
+  // ── Cambio de estado de piezas desde Sidebar/Marketplace ─
+  const handlePedidoEstado = useCallback((ids, estado) => {
+    colorearEstado(estado, ids)
+    if (estado === 'en_camino') iniciarGPS()
+    // Los remitos ya no se generan acá — se crean al adjudicar cotización
+  }, [colorearEstado, iniciarGPS])
 
-  // ── Chat IA ─────────────────────────────────────────────
+  // ── Chat IA ──────────────────────────────────────────────
   const sendMessage = async () => {
     if (!chatInput.trim() || !modelData || chatLoading) return
     const q = chatInput.trim(); setChatInput('')
     setChatMessages(prev => [...prev, { role: 'user', text: q }])
     setChatLoading(true)
     try {
-      const res = await fetch(API_URL + '/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: q, model_data: modelData }) })
+      const res = await fetch(API_URL + '/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: q, model_data: modelData })
+      })
       const data = await res.json()
       setChatMessages(prev => [...prev, { role: 'assistant', text: data.answer }])
-    } catch (_) { setChatMessages(prev => [...prev, { role: 'assistant error', text: 'Error al conectar con el servidor.' }]) }
+    } catch (_) {
+      setChatMessages(prev => [...prev, { role: 'assistant error', text: 'Error al conectar con el servidor.' }])
+    }
     setChatLoading(false)
   }
 
-  // ── Derived values ──────────────────────────────────────
+  // ── Derived values ───────────────────────────────────────
   const totalCatIds     = Object.values(categoryIds).flat().length
   const remitosFiltered = selectedEstado ? remitos.filter(r => r.estado === selectedEstado) : remitos
+   
+  if (!currentUser && !loading) return <LoginForm />
 
-  // ── Render ──────────────────────────────────────────────
+  // ── Render ───────────────────────────────────────────────
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
 
@@ -208,6 +291,10 @@ export default function App() {
           {lastSync
             ? <span style={{ fontSize: '0.78rem', color: '#22c55e', fontWeight: 600 }}>⚡ Speckle · {lastSync}</span>
             : <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>⚡ Conectando Speckle...</span>
+          }
+          {currentUser
+            ? <span style={{ fontSize: '0.78rem', color: '#6366f1', fontWeight: 600 }}>👤 {currentUser.email}</span>
+            : <span style={{ fontSize: '0.78rem', color: '#f59e0b', fontWeight: 600 }}>⚠ Sin sesión</span>
           }
           <button className="btn-contact">Contacto</button>
         </nav>
@@ -232,6 +319,17 @@ export default function App() {
           speckleEls={speckleEls} speckleLoading={speckleLoading} speckleError={speckleError}
           speckleStats={speckleStats} lastSync={lastSync} projectName={projectName}
           loadSpeckle={loadSpeckle} handleSpeckleEstadoChange={handleSpeckleEstadoChange}
+          onSelectionChange={(ids) => console.log('seleccionados:', ids)}
+          elementFloor={elementFloor}
+          concreteIds={concreteIdsRef.current}
+          onPedidoEstado={handlePedidoEstado}
+          // Nuevas props
+          user={currentUser}
+          ifcViewer={viewerRef}
+          ifcStats={ifcStats}
+          onAdjudicarCotizacion={handleAdjudicarCotizacion}
+          proyectosGuardados={proyectosGuardados}
+          onCargarProyectoGuardado={handleCargarProyectoGuardado}
         />
 
         <ViewerArea

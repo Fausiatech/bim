@@ -9,9 +9,9 @@ export const CATEGORIES = {
 }
 
 export const ESTADOS_IFC = {
-  entregado: { label: 'Entregado', color: '#4CAF50', three: 0x4CAF50, icon: '✅' },
-  en_camino: { label: 'En camino', color: '#FFC107', three: 0xFFC107, icon: '🚚' },
-  pendiente: { label: 'Pendiente', color: '#F44336', three: 0xF44336, icon: '🔴' },
+  adjudicado: { label: 'Adjudicado', color: '#ef4444', three: 0xef4444, icon: '🔴' },
+  en_camino:  { label: 'En camino',  color: '#FFC107', three: 0xFFC107, icon: '🚚' },
+  entregado:  { label: 'Entregado',  color: '#4CAF50', three: 0x4CAF50, icon: '✅' },
 }
 
 export const OBRA   = { lat: -31.4167, lng: -64.1833, nombre: 'Obra Av. Colón 1200, Córdoba' }
