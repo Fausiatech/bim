@@ -91,7 +91,6 @@ const handleSubmit = async () => {
     if (form.fecha > maxFecha) return alert('No se aceptan pedidos con más de 30 días de anticipación')
 
     const elementosSeleccionados = []
-    // ... resto del código
     for (const [k, v] of Object.entries(selected)) {
       if (!v) continue
       const [pisoN, cat] = k.split('-')
@@ -100,6 +99,8 @@ const handleSubmit = async () => {
         elementosSeleccionados.push({ piso: pisoN, categoria: CAT_LABELS[cat], ids: pRow.cats[cat] })
       }
     }
+    console.log('ifcStats al publicar:', ifcStats)
+    console.log('selectedCount:', selectedCount)
 
     const { error } = await supabase.from('pedidos').insert({
       obra_nombre: 'Obra Av. Colón 1200',

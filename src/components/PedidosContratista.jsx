@@ -1,8 +1,7 @@
-import * as THREE from 'three'
 import { useState, useEffect, useCallback } from 'react'
+import * as THREE from 'three'
 import { supabase } from '../supabase'
 import { adjudicarCotizacion, colorearPiezasBIM, COLORES_ESTADO } from '../utils/adjudicarCotizacion'
-
 
 function Stars({ rating }) {
   return (
@@ -13,21 +12,19 @@ function Stars({ rating }) {
   )
 }
 
-// Props nuevas: user, ifcViewer (ref), onAdjudicarCotizacion (callback de App.jsx)
 export default function PedidosContratista({ user, ifcViewer, onAdjudicarCotizacion, onEstadoChange }) {
   const [pedidos,      setPedidos]      = useState([])
   const [cotizaciones, setCotizaciones] = useState({})
   const [expanded,     setExpanded]     = useState(null)
   const [loading,      setLoading]      = useState(true)
-  const [adjudicando,  setAdjudicando]  = useState(null) // id de cotización en proceso
+  const [adjudicando,  setAdjudicando]  = useState(null)
 
   useEffect(() => { fetchPedidos() }, [])
 
   const fetchPedidos = async () => {
     setLoading(true)
-    setExpanded(null)       
+    setExpanded(null)
     setCotizaciones({})
-    // RLS filtra automáticamente por usuario_id gracias al SQL setup
     const { data } = await supabase
       .from('pedidos')
       .select('*')
@@ -44,86 +41,58 @@ export default function PedidosContratista({ user, ifcViewer, onAdjudicarCotizac
       .select('*, perfiles_proveedor(empresa, rating, entregas_completadas, entregas_a_tiempo_pct, zona)')
       .eq('pedido_id', pedidoId)
       .order('precio_total', { ascending: true })
-      console.log('cotizaciones fetched:', data, 'error:', error)
+    console.log('cotizaciones fetched:', data, 'error:', error)
     if (!error) setCotizaciones(prev => ({ ...prev, [pedidoId]: data ?? [] }))
     setExpanded(pedidoId)
   }
 
   const getIds = (pedido) => pedido.elementos_ifc?.flatMap(e => e.ids) ?? []
 
-  // ── Adjudicar: genera remito real + cambia color BIM ─────
   const handleAdjudicar = useCallback(async (pedido, cotizacion) => {
     if (!confirm('¿Adjudicar este proveedor?')) return
     if (!user) return alert('Sesión expirada, volvé a iniciar sesión')
-
     setAdjudicando(cotizacion.id)
     try {
-      // Delegar a App.jsx que tiene ifcViewer y user
       await onAdjudicarCotizacion({ cotizacion, pedido })
-     // onEstadoChange?.(getIds(pedido), 'adjudicado')
       await fetchPedidos()
       setExpanded(null)
     } catch (err) {
-  if (err.message?.includes('three') || err.message?.includes('IFC')) {
-    console.warn('Color BIM:', err.message)
-  } else {
-    alert('Error al adjudicar: ' + err.message)
-  }
-} finally {
-  setAdjudicando(null)
-}
-}, [user, onAdjudicarCotizacion, onEstadoChange])
+      if (err.message?.includes('three') || err.message?.includes('IFC')) {
+        console.warn('Color BIM:', err.message)
+      } else {
+        alert('Error al adjudicar: ' + err.message)
+      }
+    } finally {
+      setAdjudicando(null)
+    }
+  }, [user, onAdjudicarCotizacion])
 
-  // ── Despachar ─────────────────────────────────────────────
   const handleDespachar = async (pedido) => {
-  const { error } = await supabase.from('pedidos').update({ estado: 'en_camino' }).eq('id', pedido.id)
-  console.log('despachar error:', JSON.stringify(error))
-  if (error) return alert('Error al despachar: ' + error.message)
-  onEstadoChange?.(getIds(pedido), 'en_camino')
-  try {
-    const viewer = ifcViewer?.current ?? ifcViewer
-    if (viewer) await colorearPiezasBIM(viewer, pedido.elementos_ifc, { r: 0.97, g: 0.62, b: 0.07 })
-  } catch (e) { console.warn('color BIM:', e.message) }
-  await fetchPedidos()
-}
-// ── Confirmar entrega ─────────────────────────────────────
-  
-const handleEntrega = async (pedido) => {
-  if (!confirm('¿Confirmar entrega?')) return
-  await supabase.from('pedidos').update({ estado: 'entregado' }).eq('id', pedido.id)
-  onEstadoChange?.(getIds(pedido), 'entregado')
-  try {
-    const viewer = ifcViewer?.current ?? ifcViewer
-    if (viewer) await colorearPiezasBIM(viewer, pedido.elementos_ifc, { r: 0.13, g: 0.77, b: 0.37 }) // verde
-  } catch (e) { console.warn('color BIM:', e.message) }
-  await fetchPedidos()
-}
+    const { error } = await supabase.from('pedidos').update({ estado: 'en_camino' }).eq('id', pedido.id)
+    console.log('despachar error:', JSON.stringify(error))
+    if (error) return alert('Error al despachar: ' + error.message)
+    onEstadoChange?.(getIds(pedido), 'en_camino')
+    try {
+      const viewer = ifcViewer?.current ?? ifcViewer
+      if (viewer) await colorearPiezasBIM(viewer, pedido.elementos_ifc, COLORES_ESTADO.en_camino)
+    } catch (e) { console.warn('color BIM:', e.message) }
+    await fetchPedidos()
+  }
 
-async function colorearPiezasBIM(viewer, elementosIfc, color) {
-  if (!elementosIfc?.length) return
-  const instance = viewer?.current ?? viewer
-  if (!instance) return
-  const todosLosIds = elementosIfc.flatMap(e => e.ids)
-  const material = new THREE.MeshLambertMaterial({
-    color: new THREE.Color(color.r, color.g, color.b),
-    transparent: false,
-    opacity: 1,
-    depthTest: true,
-    depthWrite: true,
-  })
-  instance.IFC.loader.ifcManager.createSubset({
-    modelID: 0,
-    ids: todosLosIds,
-    scene: instance.context.getScene(),
-    removePrevious: true,
-    customID: 'estado-color',
-    material
-  })
-}
+  const handleEntrega = async (pedido) => {
+    if (!confirm('¿Confirmar entrega?')) return
+    await supabase.from('pedidos').update({ estado: 'entregado' }).eq('id', pedido.id)
+    onEstadoChange?.(getIds(pedido), 'entregado')
+    try {
+      const viewer = ifcViewer?.current ?? ifcViewer
+      if (viewer) await colorearPiezasBIM(viewer, pedido.elementos_ifc, COLORES_ESTADO.entregado)
+    } catch (e) { console.warn('color BIM:', e.message) }
+    await fetchPedidos()
+  }
 
   const ESTADO_STYLE = {
     publicado:  { background: '#e0f2fe', color: '#0369a1' },
-    adjudicado: { background: '#fef9c3', color: '#854d0e' },
+    adjudicado: { background: '#fee2e2', color: '#991b1b' },
     en_camino:  { background: '#fff7ed', color: '#c2410c' },
     entregado:  { background: '#dcfce7', color: '#15803d' },
     borrador:   { background: '#f1f5f9', color: '#64748b' },
@@ -142,7 +111,10 @@ async function colorearPiezasBIM(viewer, elementosIfc, color) {
         const estadoStyle = ESTADO_STYLE[p.estado] ?? ESTADO_STYLE.borrador
 
         return (
-          <div key={p.id} style={{ border: '1px solid var(--border)', borderRadius: 10, marginBottom: 8, overflow: 'hidden' }}>
+          <div key={p.id}
+            onClick={() => onEstadoChange?.(getIds(p), p.estado)}
+            style={{ border: '1px solid var(--border)', borderRadius: 10, marginBottom: 8, overflow: 'hidden', cursor: 'pointer' }}>
+
             <div style={{ padding: '0.6rem 0.75rem', background: 'white' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                 <div style={{ fontWeight: 700 }}>{p.obra_nombre}</div>
@@ -162,20 +134,20 @@ async function colorearPiezasBIM(viewer, elementosIfc, color) {
               </div>
               <div style={{ display: 'flex', gap: 6 }}>
                 {p.estado === 'publicado' && (
-                  <button onClick={() => isOpen ? setExpanded(null) : fetchCotizaciones(p.id)}
+                  <button onClick={(e) => { e.stopPropagation(); isOpen ? setExpanded(null) : fetchCotizaciones(p.id) }}
                     style={{ background: 'var(--primary)', color: 'white', border: 'none', borderRadius: 6, padding: '0.3rem 0.75rem', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }}>
                     {isOpen ? 'Ocultar' : `Ver cotizaciones${cotz.length ? ` (${cotz.length})` : ''}`}
                   </button>
                 )}
                 {p.estado === 'adjudicado' && (
-                  <button onClick={() => handleDespachar(p)} style={{
+                  <button onClick={(e) => { e.stopPropagation(); handleDespachar(p) }} style={{
                     background: '#f59e0b', color: 'white', border: 'none',
                     borderRadius: 6, padding: '0.3rem 0.75rem', cursor: 'pointer',
                     fontSize: '0.75rem', fontWeight: 600
                   }}>🚚 Despachar</button>
                 )}
                 {p.estado === 'en_camino' && (
-                  <button onClick={() => handleEntrega(p)} style={{
+                  <button onClick={(e) => { e.stopPropagation(); handleEntrega(p) }} style={{
                     background: '#15803d', color: 'white', border: 'none',
                     borderRadius: 6, padding: '0.3rem 0.75rem', cursor: 'pointer',
                     fontSize: '0.75rem', fontWeight: 600
@@ -213,7 +185,7 @@ async function colorearPiezasBIM(viewer, elementosIfc, color) {
                         {c.obs && <div style={{ color: '#94a3b8', marginTop: 2 }}>💬 {c.obs}</div>}
                       </div>
                       <button
-                        onClick={() => handleAdjudicar(p, c)}
+                        onClick={(e) => { e.stopPropagation(); handleAdjudicar(p, c) }}
                         disabled={adjudicando === c.id}
                         style={{
                           background: adjudicando === c.id ? '#94a3b8' : '#15803d',

@@ -193,6 +193,7 @@ export function useIfc({ viewerRef, currentModel, categoryIds, wallsVisible, con
 
   // ── Colorear por estado ─────────────────────────────────
   const colorearEstado = useCallback((estado, ids) => {
+    console.log('colorearEstado ejecutando', estado, new Error().stack.split('\n')[2])
     console.log('colorearEstado ejecutando', estado, ids?.length, 'currentModel:', currentModel?.modelID)
     if (!viewerRef.current || !currentModel) return
     const modelID = currentModel.modelID
@@ -202,7 +203,9 @@ export function useIfc({ viewerRef, currentModel, categoryIds, wallsVisible, con
     })
     try { mgr.removeSubset(modelID, undefined, 'highlight') } catch (_) {}
     if (!estado || !ids?.length) return
+    console.log('ESTADOS_IFC[estado]:', ESTADOS_IFC[estado])
     const colorBase = new THREE.Color(ESTADOS_IFC[estado].three)
+    console.log('colorBase:', colorBase)
     const mat = new THREE.MeshLambertMaterial({
       color: colorBase, transparent: true, opacity: 0.9,
       emissive: colorBase, emissiveIntensity: 0.3, depthTest: true,
@@ -210,7 +213,9 @@ export function useIfc({ viewerRef, currentModel, categoryIds, wallsVisible, con
     })
     try {
       const validIds = ids.map(id => parseInt(id)).filter(id => !isNaN(id))
+      console.log('createSubset con', validIds.length, 'ids, customID:', `est-${estado}`)
       mgr.createSubset({ modelID, ids: validIds, material: mat, removePrevious: true, customID: `est-${estado}` })
+      console.log('createSubset OK')
     } catch (e) { console.error('colorear:', e.message) }
   }, [currentModel])
 

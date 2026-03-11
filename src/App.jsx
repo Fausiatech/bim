@@ -281,8 +281,8 @@ export default function App() {
 
       <header className="header">
         <div className="logo">
-          <img src="/logo.png" alt="BIM AI" style={{ height: 36 }} />
-          <span className="logo-text">BIM AI</span>
+          <img src="/Recurso 20.png" alt="BIM STATUS" style={{ height: 36 }} />
+          <span className="logo-text">BIM STATUS</span>
         </div>
         <nav className="nav-links">
           <a href="#" className="nav-link">Inicio</a>

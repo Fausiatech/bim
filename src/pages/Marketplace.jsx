@@ -177,6 +177,7 @@ export default function Marketplace() {
       {/* Header */}
       <div style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', padding: '1rem 2rem', display: 'flex', alignItems: 'center', gap: '1rem', boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>
         <div>
+          <img src="/Recurso 20.png" alt="logo" style={{ height: 36, objectFit: 'contain' }} />  
           <div style={{ fontWeight: 800, fontSize: '1.2rem', color: 'white' }}>🧱 BIM Marketplace</div>
           <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Portal de proveedores de hormigón</div>
         </div>
@@ -245,7 +246,7 @@ export default function Marketplace() {
         </div>
 
         {/* Columna derecha — pedidos */}
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, overflowY: 'auto', maxHeight: 'calc(100vh - 100px)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
             <div>
               <div style={{ fontWeight: 800, fontSize: '1.1rem', color: '#1e293b' }}>Pedidos activos</div>
@@ -309,7 +310,7 @@ export default function Marketplace() {
 
                     {cotice ? (
                       <div style={{ background: '#f0fdf4', borderRadius: 8, padding: '0.5rem 0.75rem', fontSize: '0.78rem', color: '#15803d' }}>
-                        ✅ Cotización enviada · ${parseFloat(miscotizaciones[p.id]?.precio_total)?.toLocaleString('es-AR')} · {miscotizaciones[p.id]?.tiempo_entrega}
+                        ✅ Cotización enviada · entrega: {miscotizaciones[p.id]?.tiempo_entrega}
                       </div>
                     ) : (
                       <button
