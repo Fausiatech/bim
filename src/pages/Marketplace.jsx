@@ -112,6 +112,7 @@ export default function Marketplace() {
   }
 
   const handleSubmitCotizacion = async () => {
+    console.log('handleSubmitCotizacion llamado', { selected, proveedorId, form })
     if (!proveedorId) return alert('Seleccioná tu empresa primero')
     if (!form.precio_m3 || !form.tiempo_entrega) return alert('Completá precio y tiempo de entrega')
 

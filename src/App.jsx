@@ -52,7 +52,7 @@ export default function App() {
 
   const { scanModel, colorearEstado, highlightCategory,
           toggleWalls, toggleConcreteOnly, handleEstadoClick,
-          elementFloorRef, concreteIdsRef } = useIfc({
+          elementFloorRef, concreteIdsRef, colorearPedidosDesdeSupabase} = useIfc({
     viewerRef, currentModel, categoryIds, wallsVisible, concreteOnly,
     selectedEstado, setSelectedEstado, setCategoryIds, setIfcStats,
     setEstadoIds,
@@ -81,8 +81,18 @@ export default function App() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       const u = session?.user ?? null
       setCurrentUser(u)
-      if (u) cargarProyectosGuardados(u.id)
-    })
+      if (u) {
+      fetchProyectosGuardados(u.id).then(proyectos => {
+        setProyectosGuardados(proyectos)
+        if (proyectos?.length) {
+          // Esperar que el viewer esté inicializado
+          setTimeout(() => {
+            handleCargarProyectoGuardado(proyectos[0])
+          }, 1000)
+        }
+      })
+    }
+  })
 
     // Escuchar cambios de sesión (login / logout / token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -125,6 +135,7 @@ export default function App() {
       try {
         await scanModel(model.modelID, proyecto.file_name, proyecto.storage_path)
         setElementFloor(elementFloorRef.current)
+        await colorearPedidosDesdeSupabase(model.modelID)
       } catch (e) {
         console.error('scan:', e)
       } finally {
@@ -232,7 +243,7 @@ export default function App() {
     })
     if (pedido.elementos_ifc?.length) {
       const ids = pedido.elementos_ifc.flatMap(e => e.ids)
-      console.log('llamando colorearEstado adjudicado con ids:', ids)
+     
       colorearEstado('adjudicado', ids)
     }
     setRemitos(prev => [remito, ...prev])

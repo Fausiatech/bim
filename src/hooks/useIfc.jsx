@@ -7,14 +7,12 @@ export function useIfc({ viewerRef, currentModel, categoryIds, wallsVisible, con
   setModelData, setChatMessages, iniciarGPS, setActiveTab,
   supabase, currentUser, currentCat, setWallsVisible, setConcreteOnly, setCategoryLabels }) {
 
-  // ── eliminado: generarRemitos ya no se recibe como prop ──
-
   const getScene = () =>
     viewerRef.current?.context?.scene?.scene ??
     viewerRef.current?.context?.getScene()
 
-  const concreteIdsRef = useRef([])
-  const statsRef       = useRef(null)
+  const concreteIdsRef  = useRef([])
+  const statsRef        = useRef(null)
   const elementFloorRef = useRef({})
 
   // ── Save analysis ───────────────────────────────────────
@@ -26,6 +24,66 @@ export function useIfc({ viewerRef, currentModel, categoryIds, wallsVisible, con
       category: currentCat, created_at: new Date().toISOString()
     })
   }
+
+  // ── Función base para colorear IDs con un color ─────────
+  // Un solo enfoque: highlightIfcItemsByID. Sin subsets manuales.
+  const colorearIds = useCallback((modelID, ids, color) => {
+    if (!viewerRef.current || !ids?.length) return
+    const validIds = [...new Set(ids.map(id => parseInt(id)).filter(id => !isNaN(id)))]
+    if (!validIds.length) return
+    try {
+      viewerRef.current.IFC.selector.highlightIfcItemsByID(
+        modelID, validIds, false,
+        new THREE.MeshLambertMaterial({ color: new THREE.Color(color), transparent: true, opacity: 0.9 })
+      )
+    } catch (e) { console.warn('colorearIds:', e.message) }
+  }, [])
+
+  // ── Colorear un estado (limpia todo primero) ────────────
+  // Usada para interacción manual — click en pedido, adjudicar, etc.
+  const colorearEstado = useCallback((estado, ids) => {
+    if (!viewerRef.current || !currentModel) return
+    const modelID = currentModel.modelID
+    const mgr = viewerRef.current.IFC.loader.ifcManager
+    // Limpiar subsets anteriores
+    Object.keys(ESTADOS_IFC).forEach(k => {
+      try { mgr.removeSubset(modelID, undefined, `est-${k}`) } catch (_) {}
+    })
+    try { mgr.removeSubset(modelID, undefined, 'highlight') } catch (_) {}
+    if (!estado || !ids?.length) return
+    colorearIds(modelID, ids, ESTADOS_IFC[estado].three)
+  }, [currentModel, colorearIds])
+
+  // ── Colorear todos los pedidos desde Supabase ───────────
+  // Usada al cargar modelo y al togglear muros — todos los estados coexisten
+  const colorearPedidosDesdeSupabase = useCallback(async (modelID) => {
+    try {
+      const { data: pedidos } = await supabase
+        .from('pedidos')
+        .select('estado, elementos_ifc')
+        .in('estado', ['adjudicado', 'en_camino', 'entregado'])
+      if (!pedidos?.length) return
+
+      const idsPorEstado = { adjudicado: [], en_camino: [], entregado: [] }
+      for (const p of pedidos) {
+        const pIds = p.elementos_ifc?.flatMap(e => e.ids) ?? []
+        if (idsPorEstado[p.estado]) idsPorEstado[p.estado].push(...pIds)
+      }
+
+      // Colorear cada estado — highlightIfcItemsByID acumula sin pisar
+      for (const estado of ['adjudicado', 'en_camino', 'entregado']) {
+        if (!idsPorEstado[estado].length) continue
+        colorearIds(modelID, idsPorEstado[estado], ESTADOS_IFC[estado].three)
+      }
+
+      setEstadoIds({
+        adjudicado: idsPorEstado.adjudicado,
+        en_camino:  idsPorEstado.en_camino,
+        entregado:  idsPorEstado.entregado,
+      })
+      if (idsPorEstado.en_camino.length > 0) iniciarGPS()
+    } catch (e) { console.warn('colorearPedidos:', e.message) }
+  }, [supabase, colorearIds, iniciarGPS])
 
   // ── Scan IFC model ──────────────────────────────────────
   const scanModel = async (modelID, name, sp) => {
@@ -145,40 +203,21 @@ export function useIfc({ viewerRef, currentModel, categoryIds, wallsVisible, con
 
     // ── Actualizar refs y estado ──────────────────────────
     concreteIdsRef.current = concreteIds
-    elementFloorRef.current = floorMap  // ← una sola asignación al final
+    elementFloorRef.current = floorMap
 
     const stats = { total, volume: geoVol > 0 ? geoVol : vol, concrete, steel, none }
     statsRef.current = stats
     setCategoryIds(ids)
     setIfcStats(stats)
 
-    // ── Estados iniciales desde Supabase (no random) ──────
-    // Cargar pedidos existentes para colorear el modelo
-    if (currentUser) {
-      try {
-        const { data: pedidos } = await supabase
-          .from('pedidos')
-          .select('estado, elementos_ifc')
-          .neq('estado', 'borrador')
-        
-        if (pedidos?.length) {
-          const estados = { entregado: [], en_camino: [], pendiente: [], adjudicado: [] }
-          for (const p of pedidos) {
-            const pIds = p.elementos_ifc?.flatMap(e => e.ids) ?? []
-            if (estados[p.estado]) estados[p.estado].push(...pIds)
-          }
-          setEstadoIds(estados)
-          if (estados.en_camino.length > 0) iniciarGPS()
-        }
-      } catch (e) { console.log('estados desde supabase:', e.message) }
-    }
+    // ── Colorear pedidos al terminar el scan ──────────────
+    await colorearPedidosDesdeSupabase(modelID)
 
-    // Cargar remitos reales desde Supabase
+    // ── Cargar remitos ────────────────────────────────────
     if (currentUser) {
       try {
         const { data: remitosDB } = await supabase
-          .from('remitos')
-          .select('*')
+          .from('remitos').select('*')
           .eq('usuario_id', currentUser.id)
           .order('created_at', { ascending: false })
         setRemitos(remitosDB ?? [])
@@ -190,34 +229,6 @@ export function useIfc({ viewerRef, currentModel, categoryIds, wallsVisible, con
     setChatMessages(prev => [...prev, { role: 'assistant', text: `Modelo "${name}" analizado. ${total} elementos, ${concrete} de hormigón.` }])
     await saveAnalysis(name, sp, total, geoVol > 0 ? geoVol : vol, summary)
   }
-
-  // ── Colorear por estado ─────────────────────────────────
-  const colorearEstado = useCallback((estado, ids) => {
-    console.log('colorearEstado ejecutando', estado, new Error().stack.split('\n')[2])
-    console.log('colorearEstado ejecutando', estado, ids?.length, 'currentModel:', currentModel?.modelID)
-    if (!viewerRef.current || !currentModel) return
-    const modelID = currentModel.modelID
-    const mgr = viewerRef.current.IFC.loader.ifcManager
-    Object.keys(ESTADOS_IFC).forEach(k => {
-      try { mgr.removeSubset(modelID, undefined, `est-${k}`) } catch (_) {}
-    })
-    try { mgr.removeSubset(modelID, undefined, 'highlight') } catch (_) {}
-    if (!estado || !ids?.length) return
-    console.log('ESTADOS_IFC[estado]:', ESTADOS_IFC[estado])
-    const colorBase = new THREE.Color(ESTADOS_IFC[estado].three)
-    console.log('colorBase:', colorBase)
-    const mat = new THREE.MeshLambertMaterial({
-      color: colorBase, transparent: true, opacity: 0.9,
-      emissive: colorBase, emissiveIntensity: 0.3, depthTest: true,
-      side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
-    })
-    try {
-      const validIds = ids.map(id => parseInt(id)).filter(id => !isNaN(id))
-      console.log('createSubset con', validIds.length, 'ids, customID:', `est-${estado}`)
-      mgr.createSubset({ modelID, ids: validIds, material: mat, removePrevious: true, customID: `est-${estado}` })
-      console.log('createSubset OK')
-    } catch (e) { console.error('colorear:', e.message) }
-  }, [currentModel])
 
   // ── Handle estado click ─────────────────────────────────
   const handleEstadoClick = useCallback((estado) => {
@@ -298,13 +309,17 @@ export function useIfc({ viewerRef, currentModel, categoryIds, wallsVisible, con
         mgr.createSubset({ modelID, ids: visibleIds, scene, removePrevious: true, customID: 'no-walls' })
         const subsetUUID = mgr.getSubset(modelID, undefined, 'no-walls')?.uuid
         scene.children.forEach(c => { if (c.modelID === modelID) c.visible = c.uuid === subsetUUID })
+        // Restaurar colores de estados
+        await colorearPedidosDesdeSupabase(modelID)
       } else {
         scene.children.forEach(c => { if (c.modelID === modelID) c.visible = true })
         try { mgr.removeSubset(modelID, undefined, 'no-walls') } catch (_) {}
+        // Restaurar colores de estados
+        await colorearPedidosDesdeSupabase(modelID)
       }
       setWallsVisible(next)
     } catch (e) { console.error('toggleWalls:', e.message) }
-  }, [currentModel, categoryIds, wallsVisible])
+  }, [currentModel, categoryIds, wallsVisible, colorearPedidosDesdeSupabase])
 
   // ── Toggle concrete only ────────────────────────────────
   const toggleConcreteOnly = useCallback(async (next) => {
@@ -333,5 +348,9 @@ export function useIfc({ viewerRef, currentModel, categoryIds, wallsVisible, con
     } catch (err) { console.error('toggleConcreteOnly error:', err) }
   }, [currentModel, categoryIds])
 
-  return { scanModel, colorearEstado, highlightCategory, toggleWalls, toggleConcreteOnly, handleEstadoClick, elementFloorRef, concreteIdsRef }
+  return { 
+    scanModel, colorearEstado, colorearPedidosDesdeSupabase,
+    highlightCategory, toggleWalls, toggleConcreteOnly, 
+    handleEstadoClick, elementFloorRef, concreteIdsRef 
+  }
 }
