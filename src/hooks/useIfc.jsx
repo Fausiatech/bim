@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useRef, useEffect } from 'react'
 import * as THREE from 'three'
 import { CATEGORIES, ESTADOS_IFC } from '../constants'
 
@@ -14,6 +14,9 @@ export function useIfc({ viewerRef, currentModel, categoryIds, wallsVisible, con
   const concreteIdsRef  = useRef([])
   const statsRef        = useRef(null)
   const elementFloorRef = useRef({})
+  const globalIdMapRef = useRef({})
+ 
+
 
   // ── Save analysis ───────────────────────────────────────
   const saveAnalysis = async (name, sp, total, vol, summary) => {
@@ -27,18 +30,26 @@ export function useIfc({ viewerRef, currentModel, categoryIds, wallsVisible, con
 
   // ── Función base para colorear IDs con un color ─────────
   // Un solo enfoque: highlightIfcItemsByID. Sin subsets manuales.
-  const colorearIds = useCallback((modelID, ids, color) => {
-    if (!viewerRef.current || !ids?.length) return
-    const validIds = [...new Set(ids.map(id => parseInt(id)).filter(id => !isNaN(id)))]
-    if (!validIds.length) return
-    try {
-      viewerRef.current.IFC.selector.highlightIfcItemsByID(
-        modelID, validIds, false,
-        new THREE.MeshLambertMaterial({ color: new THREE.Color(color), transparent: true, opacity: 0.9 })
-      )
-    } catch (e) { console.warn('colorearIds:', e.message) }
-  }, [])
-
+ const colorearIds = useCallback((modelID, idsInput, color, customID = 'color-subset') => {
+  if (!viewerRef.current || !idsInput?.length) return
+  const mgr = viewerRef.current.IFC.loader.ifcManager
+  const scene = viewerRef.current.context.getScene()
+  const validIds = [...new Set(idsInput.map(id => parseInt(id)).filter(id => !isNaN(id)))]
+  if (!validIds.length) return
+  
+  // Remover primero para evitar el bug de 'mesh' undefined
+  try { mgr.removeSubset(modelID, undefined, customID) } catch(_) {}
+  
+  const mat = new THREE.MeshLambertMaterial({
+    color: new THREE.Color(color),
+    transparent: true, opacity: 0.85,
+    depthTest: true, side: THREE.DoubleSide,
+    polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+  })
+  try {
+    mgr.createSubset({ modelID, ids: validIds, scene, material: mat, removePrevious: false, customID })
+  } catch(e) { console.warn('colorearIds:', e.message) }
+}, [])
   // ── Colorear un estado (limpia todo primero) ────────────
   // Usada para interacción manual — click en pedido, adjudicar, etc.
   const colorearEstado = useCallback((estado, ids) => {
@@ -51,7 +62,7 @@ export function useIfc({ viewerRef, currentModel, categoryIds, wallsVisible, con
     })
     try { mgr.removeSubset(modelID, undefined, 'highlight') } catch (_) {}
     if (!estado || !ids?.length) return
-    colorearIds(modelID, ids, ESTADOS_IFC[estado].three)
+    colorearIds(modelID, ids, ESTADOS_IFC[estado].three, `est-${estado}`)
   }, [currentModel, colorearIds])
 
   // ── Colorear todos los pedidos desde Supabase ───────────
@@ -86,65 +97,53 @@ export function useIfc({ viewerRef, currentModel, categoryIds, wallsVisible, con
   }, [supabase, colorearIds, iniciarGPS])
 
   // ── Scan IFC model ──────────────────────────────────────
-  const scanModel = async (modelID, name, sp) => {
-    const mgr = viewerRef.current.IFC.loader.ifcManager
-    const ids = {}
-    let total = 0, concrete = 0, steel = 0, none = 0, vol = 0
-    const summary = {}, concreteIds = []
+ const scanModel = async (modelID, name, sp) => {
+  const mgr = viewerRef.current.IFC.loader.ifcManager
+  const ids = {}
+  const globalIdMap = {} // expressID → globalId
+  let total = 0, concrete = 0, steel = 0, none = 0, vol = 0
+  const summary = {}, concreteIds = []
 
-    for (const [key, cat] of Object.entries(CATEGORIES)) {
-      if (key === 'all') continue
-      ids[key] = []
-      for (const typeName of cat.codes) {
-        try {
-          const { [typeName]: typeCode } = await import('web-ifc')
-          const found = await mgr.getAllItemsOfType(modelID, typeCode, false)
-          if (!found?.length) continue
-          const fresh = found.filter(id => !ids[key].includes(id))
-          ids[key].push(...fresh)
-          total += fresh.length
+  for (const [key, cat] of Object.entries(CATEGORIES)) {
+    if (key === 'all') continue
+    ids[key] = []
+    for (const typeName of cat.codes) {
+      try {
+        const { [typeName]: typeCode } = await import('web-ifc')
+        const found = await mgr.getAllItemsOfType(modelID, typeCode, false)
+        if (!found?.length) continue
+        const fresh = found.filter(id => !ids[key].includes(id))
+        ids[key].push(...fresh)
+        total += fresh.length
 
-          const sample = fresh.slice(0, 50)
-          await Promise.all(sample.map(async (id) => {
-            try {
-              const ma = await mgr.getMaterialsProperties(modelID, id, false)
-              const matName = ma?.[0]?.Name?.value ?? ma?.[0]?.ForLayerSet?.LayerSetName?.value ?? 'Sin material'
-              const low = matName.toLowerCase()
-              if (!summary[matName]) summary[matName] = { count: 0, volume: 0 }
-              summary[matName].count++
-              if (low.includes('concret') || low.includes('hormig')) {
-                concrete++; concreteIds.push(id)
-              } else if (low.includes('steel') || low.includes('acero')) {
-                steel++
-              } else {
-                try {
-                  const props = await mgr.getItemProperties(modelID, id)
-                  const nombre = (props?.Name?.value ?? '').toLowerCase()
-                  if (nombre.includes('concret') || nombre.includes('hormig')) {
-                    concrete++; concreteIds.push(id)
-                    summary[matName].count--
-                    if (!summary['Concrete (by name)']) summary['Concrete (by name)'] = { count: 0, volume: 0 }
-                    summary['Concrete (by name)'].count++
-                  } else { none++ }
-                } catch (_) { none++ }
-              }
-            } catch (_) { none++ }
-          }))
+        await Promise.all(fresh.map(async (id) => {
+          try {
+            const props = await mgr.getItemProperties(modelID, id, false)
+            // ← capturar GlobalId para todos los elementos
+            if (props?.GlobalId?.value) globalIdMap[id] = props.GlobalId.value
 
-          await Promise.all(fresh.slice(50).map(async (id) => {
-            try {
-              const props = await mgr.getItemProperties(modelID, id)
-              const nombre = (props?.Name?.value ?? '').toLowerCase()
-              if (nombre.includes('concret') || nombre.includes('hormig')) {
-                concrete++; concreteIds.push(id)
-              } else if (nombre.includes('steel') || nombre.includes('acero')) {
-                steel++
-              } else { none++ }
-            } catch (_) { none++ }
-          }))
-        } catch (_) {}
-      }
+            const nombre = (props?.Name?.value ?? '').toLowerCase()
+            const ma = await mgr.getMaterialsProperties(modelID, id, false)
+            const matName = ma?.[0]?.Name?.value ?? 
+                           ma?.[0]?.ForLayerSet?.LayerSetName?.value ?? 
+                           'Sin material'
+            const low = matName.toLowerCase()
+
+            if (!summary[matName]) summary[matName] = { count: 0, volume: 0 }
+            summary[matName].count++
+
+            if (low.includes('concret') || low.includes('hormig') ||
+                nombre.includes('concret') || nombre.includes('hormig')) {
+              concrete++; concreteIds.push(id)
+            } else if (low.includes('steel') || low.includes('acero') ||
+                       nombre.includes('steel') || nombre.includes('acero')) {
+              steel++
+            } else { none++ }
+          } catch (_) { none++ }
+        }))
+      } catch (_) {}
     }
+  }
 
     // ── Construir mapa elementId → piso ───────────────────
     const { IFCRELCONTAINEDINSPATIALSTRUCTURE, IFCBUILDINGSTOREY } = await import('web-ifc')
@@ -228,7 +227,8 @@ export function useIfc({ viewerRef, currentModel, categoryIds, wallsVisible, con
     setModelData(md)
     setChatMessages(prev => [...prev, { role: 'assistant', text: `Modelo "${name}" analizado. ${total} elementos, ${concrete} de hormigón.` }])
     await saveAnalysis(name, sp, total, geoVol > 0 ? geoVol : vol, summary)
-  }
+    globalIdMapRef.current = globalIdMap
+}
 
   // ── Handle estado click ─────────────────────────────────
   const handleEstadoClick = useCallback((estado) => {
@@ -323,34 +323,35 @@ export function useIfc({ viewerRef, currentModel, categoryIds, wallsVisible, con
 
   // ── Toggle concrete only ────────────────────────────────
   const toggleConcreteOnly = useCallback(async (next) => {
-    if (!currentModel || !viewerRef.current) return
-    const modelID = currentModel.modelID
-    const mgr = viewerRef.current.IFC.loader.ifcManager
-    const scene = getScene()
-    try {
-      if (next) {
-        const allConcreteIds = [
-          ...concreteIdsRef.current,
-          ...(categoryIds['footings'] ?? [])
-        ].filter((v, i, a) => a.indexOf(v) === i)
-        if (!allConcreteIds.length) return
-        await mgr.createSubset({ modelID, ids: allConcreteIds, scene, removePrevious: true, customID: 'concrete-only' })
-        scene.children.forEach(c => { if (c.modelID === modelID) c.visible = false })
-        const subset = mgr.getSubset(modelID, undefined, 'concrete-only')
-        if (subset) subset.visible = true
-        setIfcStats(prev => ({ ...prev, total: allConcreteIds.length, concrete: concreteIdsRef.current.length }))
-      } else {
-        mgr.removeSubset(modelID, scene, 'concrete-only')
-        scene.children.forEach(c => { if (c.modelID === modelID) c.visible = true })
-        if (statsRef.current) setIfcStats(statsRef.current)
-      }
-      setConcreteOnly(next)
-    } catch (err) { console.error('toggleConcreteOnly error:', err) }
-  }, [currentModel, categoryIds])
+  if (!currentModel || !viewerRef.current) return
+  const modelID = currentModel.modelID
+  const mgr = viewerRef.current.IFC.loader.ifcManager
+  const scene = getScene()
+  try {
+    if (next) {
+      const allConcreteIds = [
+        ...concreteIdsRef.current,
+        ...(categoryIds['footings'] ?? [])
+      ].filter((v, i, a) => a.indexOf(v) === i)
+      if (!allConcreteIds.length) return
+      await mgr.createSubset({ modelID, ids: allConcreteIds, scene, removePrevious: true, customID: 'concrete-only' })
+      scene.children.forEach(c => { if (c.modelID === modelID) c.visible = false })
+      const subset = mgr.getSubset(modelID, undefined, 'concrete-only')
+      if (subset) subset.visible = true
+      await colorearPedidosDesdeSupabase(modelID)  // ← agregado acá
+      setIfcStats(prev => ({ ...prev, total: allConcreteIds.length, concrete: concreteIdsRef.current.length }))
+    } else {
+      mgr.removeSubset(modelID, scene, 'concrete-only')
+      scene.children.forEach(c => { if (c.modelID === modelID) c.visible = true })
+      if (statsRef.current) setIfcStats(statsRef.current)
+    }
+    setConcreteOnly(next)
+  } catch (err) { console.error('toggleConcreteOnly error:', err) }
+}, [currentModel, categoryIds, colorearPedidosDesdeSupabase])  // ← agregado acá
 
   return { 
     scanModel, colorearEstado, colorearPedidosDesdeSupabase,
     highlightCategory, toggleWalls, toggleConcreteOnly, 
-    handleEstadoClick, elementFloorRef, concreteIdsRef 
+    handleEstadoClick, elementFloorRef, concreteIdsRef,globalIdMapRef  
   }
 }

@@ -13,7 +13,7 @@ const fechaLocal = (fechaStr) => {
   return `${fechaStr}T00:00:00${sign}${h}:${m}`
 }
 
-export default function GanttColado({ elementFloor, concreteIds, categoryIds, onSelectionChange, ifcStats }) {
+export default function GanttColado({ elementFloor, concreteIds, categoryIds, onSelectionChange, ifcStats, globalIdMap }) {
   const [selected,  setSelected]  = useState({})
   const [showForm,  setShowForm]  = useState(false)
   const [form,      setForm]      = useState({ resistencia: 'H-25', fecha: '', hora: '07:00', obs: '' })
@@ -90,15 +90,21 @@ const handleSubmit = async () => {
     if (form.fecha < hoy) return alert('La fecha de colado no puede ser anterior a hoy')
     if (form.fecha > maxFecha) return alert('No se aceptan pedidos con más de 30 días de anticipación')
 
-    const elementosSeleccionados = []
-    for (const [k, v] of Object.entries(selected)) {
-      if (!v) continue
-      const [pisoN, cat] = k.split('-')
-      const pRow = matrix.find(p => p.name === pisoN)
-      if (pRow?.cats[cat]) {
-        elementosSeleccionados.push({ piso: pisoN, categoria: CAT_LABELS[cat], ids: pRow.cats[cat] })
-      }
-    }
+console.log('globalIdMap keys:', Object.keys(globalIdMap ?? {}).length)
+   const elementosSeleccionados = []
+for (const [k, v] of Object.entries(selected)) {
+  if (!v) continue
+  const [pisoN, cat] = k.split('-')
+  const pRow = matrix.find(p => p.name === pisoN)
+  if (pRow?.cats[cat]) {
+    elementosSeleccionados.push({ 
+      piso: pisoN, 
+      categoria: CAT_LABELS[cat], 
+      ids: pRow.cats[cat],
+      globalIds: pRow.cats[cat].map(id => globalIdMap?.[id]).filter(Boolean)
+    })
+  }
+}
     console.log('ifcStats al publicar:', ifcStats)
     console.log('selectedCount:', selectedCount)
 

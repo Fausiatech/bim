@@ -37,7 +37,7 @@ export default function Sidebar({
   user,
   ifcViewer,
   onAdjudicarCotizacion,
-  ifcStats,
+  ifcStats, globalIdMap
 }) {
   const gpsBannerColor = camionEstado === 'proximo' ? '#FFC107' : camionEstado === 'entregado' ? '#4CAF50' : '#607D8B'
   const gpsBannerText = camionEstado === 'proximo'
@@ -225,6 +225,7 @@ export default function Sidebar({
             categoryIds={categoryIds}
             onSelectionChange={onSelectionChange}
             ifcStats={ifcStats}
+            globalIdMap={globalIdMap}
           />
         )}
 

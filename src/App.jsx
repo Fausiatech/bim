@@ -52,7 +52,7 @@ export default function App() {
 
   const { scanModel, colorearEstado, highlightCategory,
           toggleWalls, toggleConcreteOnly, handleEstadoClick,
-          elementFloorRef, concreteIdsRef, colorearPedidosDesdeSupabase} = useIfc({
+          elementFloorRef, concreteIdsRef, colorearPedidosDesdeSupabase,globalIdMapRef} = useIfc({
     viewerRef, currentModel, categoryIds, wallsVisible, concreteOnly,
     selectedEstado, setSelectedEstado, setCategoryIds, setIfcStats,
     setEstadoIds,
@@ -121,6 +121,26 @@ export default function App() {
   try {
     const url = getIfcUrl(proyecto.storage_path)
     const model = await viewerRef.current.IFC.loadIfcUrl(url)
+    try {
+  const { IFCSPACE } = await import('web-ifc')
+  const mgr = viewerRef.current.IFC.loader.ifcManager
+  const scene = viewerRef.current.context.getScene()
+  const spaceIds = await mgr.getAllItemsOfType(model.modelID, IFCSPACE, false)
+  if (spaceIds?.length) {
+    // Crear subset invisible sin material
+    mgr.createSubset({
+      modelID: model.modelID,
+      ids: spaceIds,
+      scene,
+      removePrevious: true,
+      customID: 'hide-spaces',
+    })
+    // Ocultar el subset
+    const subset = mgr.getSubset(model.modelID, undefined, 'hide-spaces')
+    if (subset) subset.visible = false
+  }
+} catch(e) { console.warn('hideSpaces:', e.message) }
+    setCurrentModel(model)
     setCurrentModel(model)
     setCurrentStoragePath(proyecto.storage_path)
     setLoading(false)
@@ -187,15 +207,14 @@ export default function App() {
     }
     init()
     window.addEventListener('dblclick', async () => {
-      if (!viewerRef.current) return
-      try {
-        const result = await viewerRef.current.IFC.selector.pickIfcItem()
-        if (!result) return
-        const props = await viewerRef.current.IFC.loader.ifcManager.getItemProperties(result.modelID, result.id)
-        console.log('Elemento clickeado:', props)
-      } catch (e) { console.error('pick:', e) }
-    })
-    return () => { viewerRef.current?.dispose?.() }
+  if (!viewerRef.current) return
+  try {
+    const result = await viewerRef.current.IFC.selector.pickIfcItem()
+    if (!result) return
+    const props = await viewerRef.current.IFC.loader.ifcManager.getItemProperties(result.modelID, result.id)
+    console.log('Elemento clickeado:', props)
+  } catch (e) { console.error('pick:', e) }
+})
   }, [])
 
   // ── Handle IFC file (nuevo upload) ──────────────────────
@@ -209,6 +228,25 @@ export default function App() {
     const url = URL.createObjectURL(file)
     try {
       const model = await viewerRef.current.IFC.loadIfcUrl(url)
+      try {
+  const { IFCSPACE } = await import('web-ifc')
+  const mgr = viewerRef.current.IFC.loader.ifcManager
+  const scene = viewerRef.current.context.getScene()
+  const spaceIds = await mgr.getAllItemsOfType(model.modelID, IFCSPACE, false)
+  if (spaceIds?.length) {
+    // Crear subset invisible sin material
+    mgr.createSubset({
+      modelID: model.modelID,
+      ids: spaceIds,
+      scene,
+      removePrevious: true,
+      customID: 'hide-spaces',
+    })
+    // Ocultar el subset
+    const subset = mgr.getSubset(model.modelID, undefined, 'hide-spaces')
+    if (subset) subset.visible = false
+  }
+} catch(e) { console.warn('hideSpaces:', e.message) }
       setCurrentModel(model)
       setLoading(false)
       setTimeout(async () => {
@@ -341,6 +379,7 @@ export default function App() {
           onAdjudicarCotizacion={handleAdjudicarCotizacion}
           proyectosGuardados={proyectosGuardados}
           onCargarProyectoGuardado={handleCargarProyectoGuardado}
+          globalIdMap={globalIdMapRef.current}
         />
 
         <ViewerArea
