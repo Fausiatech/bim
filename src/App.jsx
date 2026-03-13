@@ -12,6 +12,7 @@ import { supabase } from './supabase'
 import { adjudicarCotizacion } from './utils/adjudicarCotizacion'
 import { fetchProyectosGuardados, getIfcUrl } from './utils/cargarProyectoGuardado'
 import LoginForm from './components/LoginForm'
+import { usePedidosStats } from './hooks/usePedidosStats'
 
 // ── Eliminado: generarRemitos() random ──────────────────────
 // Los remitos ahora se crean en Supabase al adjudicar una cotización
@@ -47,9 +48,11 @@ export default function App() {
   const { camionPos, camionDist, camionEstado, iniciarGPS, resetGPS } = useGps()
 
   const { elementos: speckleEls, loading: speckleLoading, error: speckleError,
-          lastSync, projectName, stats: speckleStats, load: loadSpeckle,
+          lastSync, load: loadSpeckle,
           setElementos: setSpeckleEls } = useSpeckle()
-
+  
+  const { stats: realStats, pedidos: pedidosStats, fetchPedidos } = usePedidosStats(ifcStats, currentUser) 
+  
   const { scanModel, colorearEstado, highlightCategory,
           toggleWalls, toggleConcreteOnly, handleEstadoClick,
           elementFloorRef, concreteIdsRef, colorearPedidosDesdeSupabase,globalIdMapRef} = useIfc({
@@ -86,6 +89,7 @@ export default function App() {
         setProyectosGuardados(proyectos)
         if (proyectos?.length) {
           // Esperar que el viewer esté inicializado
+          console.log('proyectos al cargar:', proyectos)
           setTimeout(() => {
             handleCargarProyectoGuardado(proyectos[0])
           }, 1000)
@@ -328,29 +332,10 @@ export default function App() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
 
-      <header className="header">
-        <div className="logo">
-          <img src="/Recurso 20.png" alt="BIM STATUS" style={{ height: 36 }} />
-          <span className="logo-text">BIM STATUS</span>
-        </div>
-        <nav className="nav-links">
-          <a href="#" className="nav-link">Inicio</a>
-          <a href="#" className="nav-link">Proyectos</a>
-          <a href="#" className="nav-link">Documentación</a>
-          {lastSync
-            ? <span style={{ fontSize: '0.78rem', color: '#22c55e', fontWeight: 600 }}>⚡ Speckle · {lastSync}</span>
-            : <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>⚡ Conectando Speckle...</span>
-          }
-          {currentUser
-            ? <span style={{ fontSize: '0.78rem', color: '#6366f1', fontWeight: 600 }}>👤 {currentUser.email}</span>
-            : <span style={{ fontSize: '0.78rem', color: '#f59e0b', fontWeight: 600 }}>⚠ Sin sesión</span>
-          }
-          <button className="btn-contact">Contacto</button>
-        </nav>
-      </header>
 
       <div className="main-container">
         <Sidebar
+          className={activeTab === 'dashboard' ? 'sidebar-bi' : ''}
           activeTab={activeTab} setActiveTab={setActiveTab}
           currentModel={currentModel} fileName={fileName}
           categoryIds={categoryIds} totalCatIds={totalCatIds}
@@ -366,7 +351,8 @@ export default function App() {
           remitosFiltered={remitosFiltered}
           camionPos={camionPos} camionDist={camionDist} camionEstado={camionEstado}
           speckleEls={speckleEls} speckleLoading={speckleLoading} speckleError={speckleError}
-          speckleStats={speckleStats} lastSync={lastSync} projectName={projectName}
+          speckleStats={realStats} lastSync={lastSync}
+          pedidosStats={pedidosStats}
           loadSpeckle={loadSpeckle} handleSpeckleEstadoChange={handleSpeckleEstadoChange}
           onSelectionChange={(ids) => console.log('seleccionados:', ids)}
           elementFloor={elementFloor}
@@ -389,7 +375,7 @@ export default function App() {
           handleFile={handleFile}
           ifcStats={ifcStats}
           fileSize={fileSize}
-          speckleStats={speckleStats}
+          speckleStats={realStats}
           viewerRef={viewerRef}
         />
       </div>

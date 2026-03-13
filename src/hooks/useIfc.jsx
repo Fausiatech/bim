@@ -67,35 +67,45 @@ export function useIfc({ viewerRef, currentModel, categoryIds, wallsVisible, con
 
   // ── Colorear todos los pedidos desde Supabase ───────────
   // Usada al cargar modelo y al togglear muros — todos los estados coexisten
-  const colorearPedidosDesdeSupabase = useCallback(async (modelID) => {
-    try {
-      const { data: pedidos } = await supabase
-        .from('pedidos')
-        .select('estado, elementos_ifc')
-        .in('estado', ['adjudicado', 'en_camino', 'entregado'])
-      if (!pedidos?.length) return
+ const colorearPedidosDesdeSupabase = useCallback(async (modelID) => {
+  try {
+    const { data: pedidos } = await supabase
+      .from('pedidos')
+      .select('estado, elementos_ifc')
+      .in('estado', ['adjudicado', 'en_camino', 'entregado'])
+    if (!pedidos?.length) return
 
-      const idsPorEstado = { adjudicado: [], en_camino: [], entregado: [] }
-      for (const p of pedidos) {
-        const pIds = p.elementos_ifc?.flatMap(e => e.ids) ?? []
-        if (idsPorEstado[p.estado]) idsPorEstado[p.estado].push(...pIds)
-      }
+    // Construir mapa inverso globalId → expressID
+    const globalToExpress = {}
+    for (const [expressId, globalId] of Object.entries(globalIdMapRef.current)) {
+      globalToExpress[globalId] = parseInt(expressId)
+    }
 
-      // Colorear cada estado — highlightIfcItemsByID acumula sin pisar
-      for (const estado of ['adjudicado', 'en_camino', 'entregado']) {
-        if (!idsPorEstado[estado].length) continue
-        colorearIds(modelID, idsPorEstado[estado], ESTADOS_IFC[estado].three)
-      }
+    const idsPorEstado = { adjudicado: [], en_camino: [], entregado: [] }
+    for (const p of pedidos) {
+      const pIds = p.elementos_ifc?.flatMap(e => {
+        // Usar globalIds si existen, sino fallback a ids
+        if (e.globalIds?.length) {
+          return e.globalIds.map(gId => globalToExpress[gId]).filter(Boolean)
+        }
+        return e.ids ?? []
+      }) ?? []
+      if (idsPorEstado[p.estado]) idsPorEstado[p.estado].push(...pIds)
+    }
 
-      setEstadoIds({
-        adjudicado: idsPorEstado.adjudicado,
-        en_camino:  idsPorEstado.en_camino,
-        entregado:  idsPorEstado.entregado,
-      })
-      if (idsPorEstado.en_camino.length > 0) iniciarGPS()
-    } catch (e) { console.warn('colorearPedidos:', e.message) }
-  }, [supabase, colorearIds, iniciarGPS])
+    for (const estado of ['adjudicado', 'en_camino', 'entregado']) {
+      if (!idsPorEstado[estado].length) continue
+      colorearIds(modelID, idsPorEstado[estado], ESTADOS_IFC[estado].three, `est-${estado}`)
+    }
 
+    setEstadoIds({
+      adjudicado: idsPorEstado.adjudicado,
+      en_camino:  idsPorEstado.en_camino,
+      entregado:  idsPorEstado.entregado,
+    })
+    if (idsPorEstado.en_camino.length > 0) iniciarGPS()
+  } catch (e) { console.warn('colorearPedidos:', e.message) }
+}, [supabase, colorearIds, iniciarGPS, globalIdMapRef])
   // ── Scan IFC model ──────────────────────────────────────
  const scanModel = async (modelID, name, sp) => {
   const mgr = viewerRef.current.IFC.loader.ifcManager

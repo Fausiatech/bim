@@ -22,7 +22,7 @@ export default function SpeckleDashboard({ elementos, stats, lastSync, projectNa
   const [estadoLote, setEstadoLote]     = useState('')
   const [modal, setModal]               = useState(null)
 
-  const niveles = stats.niveles || []
+  const niveles = stats?.niveles ?? []
 
   const filtrados = elementos.filter(e =>
     (filtroNivel === 'todos' || e.nivel === filtroNivel) &&
@@ -43,13 +43,17 @@ export default function SpeckleDashboard({ elementos, stats, lastSync, projectNa
     color: e.color,
   })).filter(d => d.value > 0)
 
-  const riesgo = stats.observaciones > 2 ? 'alto'
-    : elementos.filter(e => e.estado === 'encofrado').length > 5 ? 'medio' : 'bajo'
-  const riesgoConf = {
-    alto:  { color: '#ef4444', label: '⚠️ Riesgo Alto' },
-    medio: { color: '#f59e0b', label: '🟡 Riesgo Medio' },
-    bajo:  { color: '#22c55e', label: '✅ Riesgo Bajo' },
-  }
+ const riesgo = (stats?.observaciones ?? 0) > 2 
+  ? 'alto' 
+  : elementos?.filter(e => e.estado === 'encofrado').length > 5 
+    ? 'medio' 
+    : 'bajo'
+
+const riesgoConf = {
+  alto:  { color: '#ef4444', label: '⚠️ Riesgo Alto' },
+  medio: { color: '#f59e0b', label: '🟡 Riesgo Medio' },
+  bajo:  { color: '#22c55e', label: '✅ Riesgo Bajo' },
+}
 
   const aplicarLote = () => {
     if (!estadoLote || !seleccionados.length) return

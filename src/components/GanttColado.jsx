@@ -91,6 +91,7 @@ const handleSubmit = async () => {
     if (form.fecha > maxFecha) return alert('No se aceptan pedidos con más de 30 días de anticipación')
 
 console.log('globalIdMap keys:', Object.keys(globalIdMap ?? {}).length)
+console.log('muestra:', Object.entries(globalIdMap ?? {}).slice(0, 3).map(([k,v]) => `${k} → ${v}`))
    const elementosSeleccionados = []
 for (const [k, v] of Object.entries(selected)) {
   if (!v) continue

@@ -4,7 +4,6 @@ import { supabase } from '../supabase'
 const RESISTENCIAS_OPTS = ['H-17', 'H-21', 'H-25', 'H-30', 'H-35', 'H-40']
 const MAX_PEDIDOS = 30
 
-// ── Proveedores simulados para testing ──────────────────────
 const PROVEEDORES_TEST = [
   { id: null,                                    nombre: '— Seleccioná tu empresa —' },
   { id: '0ad4fcdc-87c3-4141-afd6-03e509abc3ca', nombre: 'Hormigonera Norte Cba' },
@@ -45,7 +44,7 @@ export default function Marketplace() {
   const [pedidos,         setPedidos]         = useState([])
   const [perfilActivo,    setPerfilActivo]     = useState(null)
   const [proveedorId,     setProveedorId]      = useState(null)
-  const [miscotizaciones, setMisCotizaciones] = useState({}) // pedidoId → cotización propia
+  const [miscotizaciones, setMisCotizaciones] = useState({})
   const [loading,         setLoading]         = useState(true)
   const [selected,        setSelected]        = useState(null)
   const [enviado,         setEnviado]         = useState(false)
@@ -77,7 +76,7 @@ export default function Marketplace() {
     const { data } = await supabase
       .from('pedidos')
       .select('*')
-      .eq('estado', 'publicado')
+      .in('estado', ['publicado', 'adjudicado']) // ← corregido
       .order('fecha_colado', { ascending: true })
       .limit(MAX_PEDIDOS)
     setPedidos(data ?? [])
@@ -90,10 +89,7 @@ export default function Marketplace() {
   }
 
   const fetchMisCotizaciones = async (id) => {
-    const { data } = await supabase
-      .from('cotizaciones')
-      .select('*')
-      .eq('proveedor_id', id)
+    const { data } = await supabase.from('cotizaciones').select('*').eq('proveedor_id', id)
     const map = {}
     data?.forEach(c => { map[c.pedido_id] = c })
     setMisCotizaciones(map)
@@ -112,16 +108,13 @@ export default function Marketplace() {
   }
 
   const handleSubmitCotizacion = async () => {
-    console.log('handleSubmitCotizacion llamado', { selected, proveedorId, form })
     if (!proveedorId) return alert('Seleccioná tu empresa primero')
     if (!form.precio_m3 || !form.tiempo_entrega) return alert('Completá precio y tiempo de entrega')
-
     const { data: existe } = await supabase
       .from('cotizaciones').select('id')
       .eq('pedido_id', selected.id).eq('proveedor_id', proveedorId)
       .maybeSingle()
     if (existe) return alert('Ya cotizaste este pedido')
-
     try {
       const { error } = await supabase.from('cotizaciones').insert({
         pedido_id:      selected.id,
@@ -178,7 +171,7 @@ export default function Marketplace() {
       {/* Header */}
       <div style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', padding: '1rem 2rem', display: 'flex', alignItems: 'center', gap: '1rem', boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>
         <div>
-          <img src="/Recurso 20.png" alt="logo" style={{ height: 36, objectFit: 'contain' }} />  
+          <img src="/Recurso 20.png" alt="logo" style={{ height: 36, objectFit: 'contain' }} />
           <div style={{ fontWeight: 800, fontSize: '1.2rem', color: 'white' }}>🧱 BIM Marketplace</div>
           <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Portal de proveedores de hormigón</div>
         </div>
@@ -212,14 +205,12 @@ export default function Marketplace() {
                   {perfilActivo.entregas_completadas >= 100 && <Badge label="🏆 +100 entregas" color="#1e40af" bg="#dbeafe" />}
                 </div>
               </div>
-
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: '1rem' }}>
                 <MetricCard icon="📦" value={perfilActivo.entregas_completadas} label="Entregas" />
                 <MetricCard icon="✅" value={`${perfilActivo.entregas_a_tiempo_pct}%`} label="A tiempo" />
                 <MetricCard icon="👥" value={perfilActivo.cantidad_clientes ?? '—'} label="Clientes" />
                 <MetricCard icon="📐" value={`${perfilActivo.radio_cobertura_km}km`} label="Cobertura" />
               </div>
-
               <div style={{ marginBottom: '0.75rem' }}>
                 <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginBottom: 4, fontWeight: 600 }}>RESISTENCIAS</div>
                 <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
@@ -228,7 +219,6 @@ export default function Marketplace() {
                   ))}
                 </div>
               </div>
-
               <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
                 ⏱ Preaviso mínimo: <strong>{perfilActivo.preaviso_horas}hs</strong>
               </div>
@@ -251,7 +241,7 @@ export default function Marketplace() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
             <div>
               <div style={{ fontWeight: 800, fontSize: '1.1rem', color: '#1e293b' }}>Pedidos activos</div>
-              <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{pedidos.length} pedidos publicados · ordenados por fecha de colado</div>
+              <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{pedidos.length} pedidos · ordenados por fecha de colado</div>
             </div>
           </div>
 
@@ -267,8 +257,8 @@ export default function Marketplace() {
                   <div key={p.id} style={{
                     background: 'white', borderRadius: 12, padding: '1.1rem 1.25rem',
                     boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
-                    border: cotice ? '2px solid #86efac' : '1px solid #e2e8f0',
-                    opacity: cotice ? 0.85 : 1
+                    border: p.estado === 'adjudicado' ? '2px solid #fca5a5' : cotice ? '2px solid #86efac' : '1px solid #e2e8f0',
+                    opacity: p.estado === 'adjudicado' ? 0.85 : 1
                   }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.6rem' }}>
                       <div>
@@ -279,8 +269,12 @@ export default function Marketplace() {
                       </div>
                       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                         {cotice && <Badge label="✓ Ya cotizaste" color="#065f46" bg="#d1fae5" />}
-                        <span style={{ background: '#e0f2fe', color: '#0369a1', padding: '3px 10px', borderRadius: 10, fontSize: '0.72rem', fontWeight: 600 }}>
-                          publicado
+                        <span style={{
+                          background: p.estado === 'adjudicado' ? '#fee2e2' : '#e0f2fe',
+                          color: p.estado === 'adjudicado' ? '#ef4444' : '#0369a1',
+                          padding: '3px 10px', borderRadius: 10, fontSize: '0.72rem', fontWeight: 600
+                        }}>
+                          {p.estado === 'adjudicado' ? '✓ Adjudicado' : 'Publicado'}
                         </span>
                       </div>
                     </div>
@@ -307,11 +301,19 @@ export default function Marketplace() {
                         ))}
                       </div>
                     )}
-                    {p.obs && <div style={{ fontSize: '0.78rem', color: '#64748b', marginBottom: '0.6rem' }}>💬 {p.obs}</div>}
 
+                    {p.obs && (
+                      <div style={{ fontSize: '0.78rem', color: '#64748b', marginBottom: '0.6rem' }}>💬 {p.obs}</div>
+                    )}
+
+                    {/* Acción según estado */}
                     {cotice ? (
                       <div style={{ background: '#f0fdf4', borderRadius: 8, padding: '0.5rem 0.75rem', fontSize: '0.78rem', color: '#15803d' }}>
                         ✅ Cotización enviada · entrega: {miscotizaciones[p.id]?.tiempo_entrega}
+                      </div>
+                    ) : p.estado === 'adjudicado' ? (
+                      <div style={{ background: '#fee2e2', borderRadius: 8, padding: '0.5rem 0.75rem', fontSize: '0.78rem', color: '#ef4444', fontWeight: 600 }}>
+                        ✓ Este pedido ya fue adjudicado a otro proveedor
                       </div>
                     ) : (
                       <button
@@ -335,7 +337,7 @@ export default function Marketplace() {
         </div>
       </div>
 
-      {/* Modal cotización */}
+      {/* Modal cotización — fuera del map */}
       {selected && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
           <div style={{ background: 'white', borderRadius: 16, padding: 28, width: 440, boxShadow: '0 16px 48px rgba(0,0,0,0.2)', maxHeight: '90vh', overflowY: 'auto' }}>
@@ -355,7 +357,6 @@ export default function Marketplace() {
                 <div style={{ color: '#64748b', fontSize: '0.8rem', marginBottom: 16 }}>
                   {selected.obra_nombre} · {selected.m3_estimado?.toFixed(1)} m³ · {selected.resistencia}
                 </div>
-
                 {perfilActivo && (
                   <div style={{ background: '#eff6ff', borderRadius: 10, padding: '0.6rem 0.9rem', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
                     <span style={{ fontSize: '1.2rem' }}>🏭</span>
@@ -365,7 +366,6 @@ export default function Marketplace() {
                     </div>
                   </div>
                 )}
-
                 <div style={{ marginBottom: 12 }}>
                   <label style={labelStyle}>Precio por m³ ($) *</label>
                   <input type="number" value={form.precio_m3}
@@ -406,7 +406,7 @@ export default function Marketplace() {
         </div>
       )}
 
-      {/* Modal registro proveedor */}
+      {/* Modal registro proveedor — fuera del map */}
       {showRegistro && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
           <div style={{ background: 'white', borderRadius: 16, padding: 28, width: 480, boxShadow: '0 16px 48px rgba(0,0,0,0.2)', maxHeight: '90vh', overflowY: 'auto' }}>
@@ -423,7 +423,7 @@ export default function Marketplace() {
             ) : (
               <>
                 <div style={{ fontWeight: 800, fontSize: '1rem', marginBottom: 4 }}>Registrar empresa proveedora</div>
-                <div style={{ color: '#64748b', fontSize: '0.8rem', marginBottom: 16 }}>Completá los datos para aparecer en el marketplace</div>
+                <div style={{ color: '#64748b', fontSize: '0.8rem', marginBottom: 16 }}>Al registrarte podrás cotizar pedidos en el marketplace</div>
                 {[
                   { label: 'Empresa *',                     key: 'empresa',            placeholder: 'Hormigonera Norte SRL' },
                   { label: 'Zona *',                        key: 'zona',               placeholder: 'Norte Córdoba' },

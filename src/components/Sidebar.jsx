@@ -1,6 +1,6 @@
-import SpeckleDashboard from './SpeckleDashboard'
+import BIDashboard from './BIDashboard'
 import { CATEGORIES, ESTADOS_IFC, OBRA, PLANTA } from '../constants'
-import GanttColado from './GanttColado'
+import GantrealtColado from './GanttColado'
 import PedidosContratista from './PedidosContratista'
 
 export default function Sidebar({
@@ -27,7 +27,9 @@ export default function Sidebar({
   camionPos, camionDist, camionEstado,
   // speckle
   speckleEls, speckleLoading, speckleError,
-  speckleStats, lastSync, projectName,
+  realStats, 
+  pedidosStats,
+  lastSync, projectName,
   loadSpeckle, handleSpeckleEstadoChange,
   elementFloor,
   concreteIds,
@@ -37,7 +39,8 @@ export default function Sidebar({
   user,
   ifcViewer,
   onAdjudicarCotizacion,
-  ifcStats, globalIdMap
+  ifcStats, globalIdMap,
+  className
 }) {
   const gpsBannerColor = camionEstado === 'proximo' ? '#FFC107' : camionEstado === 'entregado' ? '#4CAF50' : '#607D8B'
   const gpsBannerText = camionEstado === 'proximo'
@@ -53,37 +56,39 @@ export default function Sidebar({
     ['dashboard',  'BI'],
   ]
 
-  return (
-    <aside className="sidebar">
-      <div className="sidebar-header">
-        <div className="sidebar-title">
-          {activeTab === 'dashboard' && speckleStats.total > 0 ? (projectName || 'Speckle Dashboard') : 'Estructura del Modelo'}
-        </div>
-        <div className="sidebar-subtitle">
-          {activeTab === 'dashboard' ? `${speckleStats.total} elementos · ${speckleStats.avance}% avance` : fileName || 'Sin modelo cargado'}
-        </div>
-        <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.75rem' }}>
-          {sidebarTabs.map(([k, l]) => (
-            <button key={k} onClick={() => setActiveTab(k)} style={{
-              flex: 1, padding: '0.25rem 0.1rem', border: 'none', borderRadius: 6, cursor: 'pointer',
-              fontSize: '0.65rem', fontWeight: 600,
-              background: activeTab === k ? 'var(--primary)' : 'var(--border)',
-              color: activeTab === k ? 'white' : 'var(--text-gray)'
-            }}>{l}</button>
-          ))}
-        </div>
+ return (
+  <aside className="sidebar" style={{ width: activeTab === 'dashboard' ? '420px' : '300px', transition: 'width 0.25s ease' }}>
+    <div className="sidebar-header">
+      <div className="sidebar-title">
+        {activeTab === 'dashboard' && (realStats?.total ?? 0) > 0 
+          ? (proyectoActual?.project_name || proyectoActual?.file_name || 'Proyecto') 
+          : 'Estructura del Modelo'}
       </div>
-
-      <div className="sidebar-content">
-        {camionPos && activeTab !== 'dashboard' && (
-          <div style={{ background: gpsBannerColor, color: 'white', borderRadius: 8, padding: '0.6rem 0.75rem', fontSize: '0.8rem', fontWeight: 600 }}>
-            {gpsBannerText}
-            <div style={{ fontSize: '0.7rem', fontWeight: 400, marginTop: '0.2rem', opacity: 0.9 }}>
-              📍 {PLANTA.nombre} → {OBRA.nombre}
-            </div>
+      <div className="sidebar-subtitle">
+        {activeTab === 'dashboard' 
+          ? `${realStats?.total ?? 0} elementos · ${realStats?.avance ?? 0}% avance` 
+          : fileName || 'Sin modelo cargado'}
+      </div>
+      <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.75rem' }}>
+        {sidebarTabs.map(([k, l]) => (
+          <button key={k} onClick={() => setActiveTab(k)} style={{
+            flex: 1, padding: '0.25rem 0.1rem', border: 'none', borderRadius: 6, cursor: 'pointer',
+            fontSize: '0.65rem', fontWeight: 600,
+            background: activeTab === k ? 'var(--primary)' : 'var(--border)',
+            color: activeTab === k ? 'white' : 'var(--text-gray)'
+          }}>{l}</button>
+        ))}
+      </div>
+    </div>
+    <div className="sidebar-content">
+      {camionPos && activeTab !== 'dashboard' && (
+        <div style={{ background: gpsBannerColor, color: 'white', borderRadius: 8, padding: '0.6rem 0.75rem', fontSize: '0.8rem', fontWeight: 600 }}>
+          {gpsBannerText}
+          <div style={{ fontSize: '0.7rem', fontWeight: 400, marginTop: '0.2rem', opacity: 0.9 }}>
+            📍 {PLANTA.nombre} → {OBRA.nombre}
           </div>
-        )}
-
+        </div>
+      )}
         {/* TAB MODELO */}
         {activeTab === 'categorias' && (<>
           <div className="tree-section">
@@ -191,31 +196,13 @@ export default function Sidebar({
 
         {/* TAB DASHBOARD BI */}
         {activeTab === 'dashboard' && (
-          <>
-            {speckleLoading ? (
-              <div style={{ padding: 24, textAlign: 'center', color: '#94a3b8' }}>
-                <div className="loading-spinner" style={{ margin: '0 auto 8px' }} />
-                <div style={{ fontSize: 12 }}>Cargando desde Speckle...</div>
-              </div>
-            ) : speckleError ? (
-              <div style={{ padding: 12, background: '#fee2e2', borderRadius: 8, fontSize: 12, color: '#ef4444' }}>
-                ⚠️ {speckleError}
-                <button onClick={() => loadSpeckle(import.meta.env.VITE_SPECKLE_PROJECT_ID, import.meta.env.VITE_SPECKLE_MODEL_ID)}
-                  style={{ display: 'block', marginTop: 8, padding: '4px 10px', background: '#ef4444', color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 11 }}>
-                  Reintentar
-                </button>
-              </div>
-            ) : (
-              <SpeckleDashboard
-                elementos={speckleEls}
-                stats={speckleStats}
-                lastSync={lastSync}
-                projectName={projectName}
-                onEstadoChange={handleSpeckleEstadoChange}
-              />
-            )}
-          </>
-        )}
+  <BIDashboard
+    stats={realStats}
+    lastSync={lastSync}
+    elementFloor={elementFloor}
+    pedidos={pedidosStats}
+  />
+)}
 
         {/* TAB COLADO */}
         {activeTab === 'colado' && (

@@ -32,7 +32,7 @@ export default function ViewerArea({
           </div>
           {speckleStats.total > 0 && (
             <div className="info-card" style={{ borderTop: '3px solid #22c55e' }}>
-              <div className="info-card-label">Avance Speckle</div>
+              <div className="info-card-label">Avance de obra </div>
               <div className="info-card-value" style={{ color: '#22c55e' }}>{speckleStats.avance}%</div>
             </div>
           )}

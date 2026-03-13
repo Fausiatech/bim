@@ -79,6 +79,10 @@ canvas { display: block; outline: none; }
   border: 1px solid var(--border);
 }
 
+sidebar.sidebar-bi {
+  width: 420px;
+}
+
 .sidebar-header {
   padding: 1rem 1.25rem;
   border-bottom: 1px solid var(--border);
